@@ -1,0 +1,10 @@
+.env
+*.pyc
+__pycache__/
+.git/
+.gitignore
+venv/
+../venv/
+*.log
+upload/
+google-credentials.json

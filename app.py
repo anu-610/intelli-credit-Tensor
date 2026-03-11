@@ -523,6 +523,10 @@ def init_session_state():
         "final_decision": {},
         "cam_summary": "",
         "pdf_bytes": None,
+        # ── Stage 4: Verification UI ──
+        "extraction_evidence": {},   # {"filename": [{field, value, confidence, page_number, bbox, context}]}
+        "confirmed_fields": {},      # {"filename": {"field_name": True}}  user-confirmed low-conf fields
+        "_pdf_bytes_cache": {},      # {"filename": bytes} — raw bytes stored once, reused for cache-key consistency
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -548,9 +552,356 @@ def format_to_inr_words(number):
         return f"₹ {number / 100_000:g} Lakh"
     return f"₹ {number:,}"
 
+
 # ─────────────────────────────────────────────
-#  SIDEBAR — persistent across all stages
+#  SCHEMA VERIFICATION TAB  (Stage 4)
 # ─────────────────────────────────────────────
+def _confidence_badge(conf: int) -> str:
+    """Return an HTML badge string for a confidence value 0-100."""
+    if conf >= 80:
+        return (
+            f'<span style="background:#d4edda;color:#155724;padding:3px 10px;'
+            f'border-radius:12px;font-size:11px;font-weight:700;">✓ {conf}%</span>'
+        )
+    if conf >= 50:
+        return (
+            f'<span style="background:#fff3cd;color:#856404;padding:3px 10px;'
+            f'border-radius:12px;font-size:11px;font-weight:700;">⚠ {conf}%</span>'
+        )
+    return (
+        f'<span style="background:#f8d7da;color:#721c24;padding:3px 10px;'
+        f'border-radius:12px;font-size:11px;font-weight:700;">✗ {conf}% — Review</span>'
+    )
+
+
+def _render_pdf_page_as_image(pdf_bytes: bytes, page_number: int, dpi: int = 150) -> str:
+    """
+    Renders a single PDF page (1-based) to a base64 PNG using PyMuPDF.
+    Returns a data URI string: 'data:image/png;base64,...'
+    Caches results in st.session_state['_page_img_cache'] keyed by
+    (sha256_prefix, page_number) to avoid re-rendering the same page twice.
+    """
+    import fitz
+    import hashlib
+    import base64 as _b64
+
+    cache_key = (hashlib.sha256(pdf_bytes[:4096]).hexdigest()[:16], page_number)
+    img_cache = st.session_state.setdefault("_page_img_cache", {})
+
+    if cache_key in img_cache:
+        return img_cache[cache_key]
+
+    # Clamp page to valid range
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    total_pages = len(doc)
+    page_idx = max(0, min(page_number - 1, total_pages - 1))  # 0-based
+
+    page = doc[page_idx]
+    mat = fitz.Matrix(dpi / 72, dpi / 72)   # 72 DPI is PDF default
+    pix = page.get_pixmap(matrix=mat, alpha=False)
+    png_bytes = pix.tobytes("png")
+    doc.close()
+
+    data_uri = "data:image/png;base64," + _b64.b64encode(png_bytes).decode()
+    img_cache[cache_key] = data_uri
+    return data_uri
+
+
+def _render_schema_verification_tab():
+    """
+    Renders the Schema Verification UI inside the 🔍 tab:
+    - Left column  (55 %): PDF page image with orange bbox highlight overlay
+    - Right column (45 %): Field table with confidence badges + Confirm buttons
+    """
+    import base64
+
+    evidence_store = st.session_state.get("extraction_evidence", {})
+    confirmed_store = st.session_state.get("confirmed_fields", {})
+
+    if not evidence_store:
+        if not _USE_DOCAI:
+            st.info(
+                "🔍 Schema Verification requires **Google Document AI**. "
+                "Set `USE_GOOGLE_DOCAI=true` in your environment variables and re-upload your documents."
+            )
+        else:
+            st.info(
+                "🔍 No verification data yet. "
+                "Go back to **Stage 4** and upload a PDF with a schema defined — "
+                "the system will extract field evidence automatically."
+            )
+        return
+
+    # ── File selector ────────────────────────────────────────────────────
+    filenames = list(evidence_store.keys())
+    selected_file = st.selectbox(
+        "📄 Select document to verify",
+        filenames,
+        key="verify_file_select",
+    )
+    evidence_list: list[dict] = evidence_store.get(selected_file, [])
+    confirmed_map: dict = confirmed_store.get(selected_file, {})
+
+    if not evidence_list:
+        st.warning("No evidence records found for this file.")
+        return
+
+    # ── Summary counters ─────────────────────────────────────────────────
+    total       = len(evidence_list)
+    green_count = sum(1 for e in evidence_list if e["confidence"] >= 80)
+    yellow_count= sum(1 for e in evidence_list if 50 <= e["confidence"] < 80)
+    red_count   = sum(1 for e in evidence_list if e["confidence"] < 50)
+    unconfirmed_red = [
+        e for e in evidence_list
+        if e["confidence"] < 50 and not confirmed_map.get(e["field"])
+    ]
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("✅ High Confidence (≥80%)",  f"{green_count}/{total}")
+    c2.metric("⚠️ Medium Confidence (50-79%)", f"{yellow_count}/{total}")
+    c3.metric("🚨 Needs Review (<50%)", f"{red_count}/{total}")
+
+    if unconfirmed_red:
+        st.error(
+            f"⛔ **{len(unconfirmed_red)} field(s) require human review** before proceeding. "
+            f"Please confirm or correct each red field below."
+        )
+    else:
+        st.success("✅ All fields have been reviewed. You may proceed.")
+
+    st.markdown("---")
+
+    # ── Retrieve raw PDF bytes from the bytes cache ──────────────────────
+    pdf_bytes_cache = st.session_state.get("_pdf_bytes_cache", {})
+    raw_bytes = pdf_bytes_cache.get(selected_file)
+
+    # ── Layout: PDF viewer (left) | Fields table (right) ─────────────────
+    selected_evidence: dict | None = None
+    # Default selection: first red field, else first field
+    for e in evidence_list:
+        if e["confidence"] < 50 and not confirmed_map.get(e["field"]):
+            selected_evidence = e
+            break
+    if not selected_evidence:
+        selected_evidence = evidence_list[0]
+
+    # Allow clicking a field name to change viewer selection
+    if f"selected_field_{selected_file}" not in st.session_state:
+        st.session_state[f"selected_field_{selected_file}"] = selected_evidence["field"]
+
+    active_field_name = st.session_state[f"selected_field_{selected_file}"]
+    active_evidence   = next(
+        (e for e in evidence_list if e["field"] == active_field_name),
+        selected_evidence,
+    )
+
+    col_pdf, col_fields = st.columns([55, 45])
+
+    # ── Left: PDF page image with bbox highlight ──────────────────────────
+    with col_pdf:
+        st.markdown(
+            "<div style='font-weight:700;font-size:14px;margin-bottom:8px;'>"
+            "📄 Document Preview</div>",
+            unsafe_allow_html=True,
+        )
+        evidence_page = active_evidence.get("page_number") or 1
+        bbox          = active_evidence.get("bbox") or {}
+
+        # Manual page nav state (user can scroll away from the evidence page)
+        nav_key = f"viewer_page_{selected_file}"
+        if st.session_state.get(f"jump_to_evidence_{selected_file}"):
+            st.session_state[nav_key] = evidence_page
+            st.session_state[f"jump_to_evidence_{selected_file}"] = False
+        if nav_key not in st.session_state:
+            st.session_state[nav_key] = evidence_page
+
+        current_page = st.session_state[nav_key]
+
+        if raw_bytes:
+            import fitz as _fitz_nav
+            total_pages = len(_fitz_nav.open(stream=raw_bytes, filetype="pdf"))
+
+            # ── Page navigation row ───────────────────────────────────────
+            nav_c1, nav_c2, nav_c3, nav_c4 = st.columns([1, 1, 2, 1])
+            with nav_c1:
+                if st.button("◀ Prev", key=f"prev_{selected_file}",
+                             disabled=(current_page <= 1)):
+                    st.session_state[nav_key] = current_page - 1
+                    st.rerun()
+            with nav_c2:
+                if st.button("Next ▶", key=f"next_{selected_file}",
+                             disabled=(current_page >= total_pages)):
+                    st.session_state[nav_key] = current_page + 1
+                    st.rerun()
+            with nav_c3:
+                st.markdown(
+                    f'<div style="text-align:center;padding-top:6px;font-size:12px;color:#555;">'
+                    f'Page <strong>{current_page}</strong> of {total_pages}</div>',
+                    unsafe_allow_html=True,
+                )
+            with nav_c4:
+                if st.button("🎯 Jump", key=f"jump_{selected_file}",
+                             help=f"Jump to page {evidence_page} where AI found this value"):
+                    st.session_state[nav_key] = evidence_page
+                    st.rerun()
+
+            # ── Render page as PNG ────────────────────────────────────────
+            img_data_uri = _render_pdf_page_as_image(raw_bytes, current_page, dpi=150)
+
+            # Only show bbox overlay when viewing the evidence page
+            on_evidence_page = (current_page == evidence_page)
+            if on_evidence_page and bbox:
+                x0 = bbox.get("x0", 0)
+                y0 = bbox.get("y0", 0)
+                x1 = bbox.get("x1", 1)
+                y1 = bbox.get("y1", 1)
+                # Pulse animation keyframe + overlay div
+                overlay_html = f"""
+<style>
+@keyframes pulse-border {{
+  0%   {{ box-shadow: 0 0 0 0 rgba(255,107,0,0.7); }}
+  70%  {{ box-shadow: 0 0 0 8px rgba(255,107,0,0); }}
+  100% {{ box-shadow: 0 0 0 0 rgba(255,107,0,0); }}
+}}
+</style>
+<div style="
+  position:absolute;
+  left:{x0*100:.3f}%;
+  top:{y0*100:.3f}%;
+  width:{(x1-x0)*100:.3f}%;
+  height:{(y1-y0)*100:.3f}%;
+  border:3px solid #ff6b00;
+  background:rgba(255,215,0,0.25);
+  border-radius:3px;
+  pointer-events:none;
+  animation: pulse-border 1.5s ease-out 3;
+  box-shadow: 0 0 10px rgba(255,107,0,0.6);
+"></div>"""
+            else:
+                overlay_html = ""
+
+            viewer_html = f"""
+<div style="position:relative;width:100%;border-radius:8px;overflow:hidden;
+            box-shadow:0 2px 14px rgba(0,0,0,0.15);background:#f0f0f0;">
+  <img src="{img_data_uri}"
+       style="width:100%;display:block;"
+       alt="Page {current_page}"/>
+  {overlay_html}
+</div>"""
+            st.markdown(viewer_html, unsafe_allow_html=True)
+
+            # ── Status line under image ───────────────────────────────────
+            if on_evidence_page and bbox:
+                st.markdown(
+                    f'<div style="margin-top:5px;font-size:11px;color:#e06000;font-weight:600;">'
+                    f'🎯 Highlighted: <em>{active_field_name}</em> found on page {evidence_page}</div>',
+                    unsafe_allow_html=True,
+                )
+            elif not on_evidence_page:
+                st.markdown(
+                    f'<div style="margin-top:5px;font-size:11px;color:#888;">'
+                    f'ℹ️ AI found <em>{active_field_name}</em> on page {evidence_page} — '
+                    f'click 🎯 Jump to go there</div>',
+                    unsafe_allow_html=True,
+                )
+        else:
+            st.info("PDF bytes not found in session. Please re-run the analysis.")
+
+        # Context tooltip
+        ctx = active_evidence.get("context", "")
+        if ctx:
+            st.markdown(
+                f'<div style="margin-top:10px;background:#f0f4ff;border-left:3px solid #1a5fd4;'
+                f'padding:8px 12px;border-radius:4px;font-size:12px;color:#333;">'
+                f'<strong>Source text:</strong> {ctx}</div>',
+                unsafe_allow_html=True,
+            )
+
+    # ── Right: Fields table ───────────────────────────────────────────────
+    with col_fields:
+        st.markdown(
+            "<div style='font-weight:700;font-size:14px;margin-bottom:8px;'>"
+            "🗂️ Extracted Fields</div>",
+            unsafe_allow_html=True,
+        )
+
+        for ev in evidence_list:
+            field     = ev["field"]
+            value     = ev["value"] or "Not Found"
+            conf      = int(ev.get("confidence", 0))
+            is_active = (field == active_field_name)
+            is_confirmed = confirmed_map.get(field, False)
+            needs_review = conf < 50 and not is_confirmed
+
+            row_bg = "#fffbe6" if is_active else ("" if not needs_review else "#fff5f5")
+            border = "2px solid #1a5fd4" if is_active else (
+                "1px solid #ffc9c9" if needs_review else "1px solid #e8ecf0"
+            )
+
+            st.markdown(
+                f'<div style="background:{row_bg};border:{border};border-radius:8px;'
+                f'padding:10px 14px;margin-bottom:8px;">',
+                unsafe_allow_html=True,
+            )
+
+            # Field selector button + badge in same row via columns
+            btn_col, badge_col = st.columns([3, 2])
+            with btn_col:
+                if st.button(
+                    f"📌 {field}",
+                    key=f"field_btn_{selected_file}_{field}",
+                    help="Click to jump to this field in the PDF",
+                    use_container_width=True,
+                ):
+                    st.session_state[f"selected_field_{selected_file}"] = field
+                    # Auto-jump the viewer to the evidence page for this field
+                    ev_page = ev.get("page_number") or 1
+                    st.session_state[f"viewer_page_{selected_file}"] = ev_page
+                    st.session_state[f"jump_to_evidence_{selected_file}"] = True
+                    st.rerun()
+            with badge_col:
+                st.markdown(
+                    f'<div style="padding-top:6px;">'
+                    f'{_confidence_badge(conf)}</div>',
+                    unsafe_allow_html=True,
+                )
+
+            # Value display
+            st.markdown(
+                f'<div style="font-size:13px;font-weight:600;color:#1a1a2e;'
+                f'margin:4px 0 2px 2px;">{value}</div>',
+                unsafe_allow_html=True,
+            )
+
+            # Confirm / override for low-confidence fields
+            if needs_review:
+                new_val = st.text_input(
+                    "✏️ Correct value (optional)",
+                    key=f"override_{selected_file}_{field}",
+                    placeholder="Enter correct value…",
+                )
+                if st.button(
+                    "✅ Confirm field",
+                    key=f"confirm_{selected_file}_{field}",
+                    type="primary",
+                ):
+                    if new_val.strip():
+                        # Update the evidence store with the corrected value
+                        for e2 in evidence_store[selected_file]:
+                            if e2["field"] == field:
+                                e2["value"]      = new_val.strip()
+                                e2["confidence"] = 100  # human confirmed
+                    st.session_state.confirmed_fields.setdefault(selected_file, {})[field] = True
+                    st.rerun()
+            elif is_confirmed:
+                st.markdown(
+                    '<span style="font-size:11px;color:#155724;">✔ Confirmed by reviewer</span>',
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+
 with st.sidebar:
     st.markdown("""
     <div style="padding:22px 2px 22px 2px;border-bottom:1px solid #1e3558;margin-bottom:22px;">
@@ -1658,8 +2009,24 @@ if st.session_state.current_stage == 4:
             for pdf in pdf_files:
                 doc_type = classifications.get(pdf.name)
                 file_schema = schemas.get(doc_type, []) if doc_type else []
+
+                # ── Read bytes ONCE, store in session state ──────────────────
+                # This guarantees the sha256 hash is identical for both
+                # analyze_pdf_risks_with_schema AND extract_schema_with_evidence,
+                # so the DocAI document cache is always hit on the second call.
+                if pdf.name not in st.session_state.get("_pdf_bytes_cache", {}):
+                    pdf.seek(0)
+                    if "_pdf_bytes_cache" not in st.session_state:
+                        st.session_state["_pdf_bytes_cache"] = {}
+                    st.session_state["_pdf_bytes_cache"][pdf.name] = pdf.read()
+                raw_bytes = st.session_state["_pdf_bytes_cache"][pdf.name]
+
+                # ── Main analysis (uses same raw_bytes → populates DocAI cache) ──
+                import io
+                pdf_like = io.BytesIO(raw_bytes)
+                pdf_like.name = pdf.name  # keep .name attribute for logging
                 summary = analyze_pdf_risks_with_schema(
-                    uploaded_file=pdf,
+                    uploaded_file=pdf_like,
                     llm_function=analyze_text_with_fallback,
                     doc_type=doc_type,
                     schema=file_schema if file_schema else None,
@@ -1667,6 +2034,32 @@ if st.session_state.current_stage == 4:
                 extracted_insights += (
                     f"\n### {doc_type or 'Document'}: {pdf.name}\n{summary}\n"
                 )
+
+                # ── Evidence collection for Schema Verification UI ────────────
+                # Skip if already collected (e.g. previous run was interrupted
+                # after this file completed — no need to redo).
+                already_done = pdf.name in st.session_state.extraction_evidence
+                if _USE_DOCAI and file_schema and not already_done:
+                    try:
+                        from src.data_ingestor.docai_parser import (
+                            extract_schema_with_evidence,
+                        )
+                        # raw_bytes is the same object whose sha256 is already
+                        # in the DocAI cache → cache hit, zero extra API calls.
+                        ev = extract_schema_with_evidence(
+                            pdf_bytes=raw_bytes,
+                            schema_fields=file_schema,
+                            llm_function=analyze_text_with_fallback,
+                        )
+                        st.session_state.extraction_evidence[pdf.name] = ev
+                        st.session_state.confirmed_fields.setdefault(pdf.name, {})
+                    except Exception as _ev_err:
+                        st.warning(
+                            f"⚠️ Schema Verification evidence extraction failed for **{pdf.name}**: "
+                            f"`{_ev_err}`. The Schema Verification tab will not be available for this file.",
+                            icon="⚠️",
+                        )
+                        print(f"⚠️ Evidence extraction skipped for {pdf.name}: {_ev_err}")
 
         if csv_files:
             struct_report = analyze_structured_data_with_schema(
@@ -1837,7 +2230,9 @@ Provide 3–5 bullet points.
 
     # ── Data Pipeline Logs ──
     section_header("2", "⚙️", "Real-Time Data Pipeline Logs")
-    tab_web, tab_decision = st.tabs(["🌐 Web Intelligence", "🧠 AI Decision Logic"])
+    tab_web, tab_decision, tab_verify = st.tabs(
+        ["🌐 Web Intelligence", "🧠 AI Decision Logic", "🔍 Schema Verification"]
+    )
     with tab_web:
         st.markdown(st.session_state.web_research or "No web data collected.")
     with tab_decision:
@@ -1847,6 +2242,8 @@ Provide 3–5 bullet points.
             f'{logic_html}</div>',
             unsafe_allow_html=True
         )
+    with tab_verify:
+        _render_schema_verification_tab()
 
     # ── Investment Report (CAM) ──
     st.markdown("---")

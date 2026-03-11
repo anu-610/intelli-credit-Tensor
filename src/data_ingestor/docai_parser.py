@@ -82,6 +82,17 @@ def _check_config() -> str | None:
 
 _DOCAI_PAGE_LIMIT = 15  # stay safely under the 30-page hard limit
 
+# ── In-process DocAI document cache ────────────────────────────────────────
+# Keyed by sha256(pdf_bytes) so the same PDF is never sent to DocAI twice
+# within one Streamlit session / server process.
+import hashlib as _hashlib
+_DOCAI_DOC_CACHE: dict[str, list] = {}   # hash → list of documentai.Document objects
+
+
+def _cache_key(pdf_bytes: bytes) -> str:
+    return _hashlib.sha256(pdf_bytes).hexdigest()
+
+
 def _split_pdf_bytes(pdf_bytes: bytes, chunk_size: int) -> list[bytes]:
     """
     Splits a PDF into chunks of `chunk_size` pages each.
@@ -150,10 +161,12 @@ def extract_text_with_docai(pdf_bytes: bytes) -> tuple[str, str, int]:
     extracted_risk_text = ""
     hit_count = 0
     page_offset = 0  # track real page numbers across chunks
+    cached_docs = []  # store document objects for the cache
 
     for chunk_idx, chunk_bytes in enumerate(chunks, 1):
         print(f"   [DOCAI] Processing chunk {chunk_idx}/{len(chunks)}...")
         document = _docai_process_chunk(client, processor_name, chunk_bytes)
+        cached_docs.append((page_offset, document))  # ← save for evidence reuse
 
         full_document_text += document.text
 
@@ -179,6 +192,10 @@ def extract_text_with_docai(pdf_bytes: bytes) -> tuple[str, str, int]:
 
         page_offset += len(document.pages)
 
+    # ── Populate cache so extract_schema_with_evidence can reuse these docs ──
+    _DOCAI_DOC_CACHE[_cache_key(pdf_bytes)] = cached_docs
+    print(f"   [DOCAI] Cached {len(cached_docs)} document chunks for evidence reuse.")
+
     return full_document_text, extracted_risk_text, hit_count
 
 
@@ -187,28 +204,40 @@ def extract_text_with_docai(pdf_bytes: bytes) -> tuple[str, str, int]:
 def extract_tables_with_docai(pdf_bytes: bytes) -> str:
     """
     Returns a Markdown representation of every table found by Document AI.
-    Automatically chunks large PDFs to stay under the 30-page API limit.
+    Reuses cached documents from extract_text_with_docai — zero extra API calls.
     """
     err = _check_config()
     if err:
         return ""
 
-    processor_name = (
-        f"projects/{_PROJECT_ID}/locations/{_LOCATION}"
-        f"/processors/{_PROCESSOR_ID}"
-    )
-    client_options = {"api_endpoint": f"{_LOCATION}-documentai.googleapis.com"}
-    client = documentai.DocumentProcessorServiceClient(
-        client_options=client_options
-    )
+    ck = _cache_key(pdf_bytes)
 
-    chunks = _split_pdf_bytes(pdf_bytes, _DOCAI_PAGE_LIMIT)
+    # ── Use cached docs if available (they were populated by extract_text_with_docai) ──
+    if ck in _DOCAI_DOC_CACHE:
+        print("   [DOCAI] Tables: reusing cached documents — no extra API call.")
+        cached_docs = _DOCAI_DOC_CACHE[ck]
+    else:
+        # Fallback: process now and cache
+        print("   [DOCAI] Tables: cache miss — processing PDF...")
+        processor_name = (
+            f"projects/{_PROJECT_ID}/locations/{_LOCATION}"
+            f"/processors/{_PROCESSOR_ID}"
+        )
+        client = documentai.DocumentProcessorServiceClient(
+            client_options={"api_endpoint": f"{_LOCATION}-documentai.googleapis.com"}
+        )
+        chunks = _split_pdf_bytes(pdf_bytes, _DOCAI_PAGE_LIMIT)
+        cached_docs = []
+        page_offset = 0
+        for chunk_bytes in chunks:
+            document = _docai_process_chunk(client, processor_name, chunk_bytes)
+            cached_docs.append((page_offset, document))
+            page_offset += len(document.pages)
+        _DOCAI_DOC_CACHE[ck] = cached_docs
+
     md_tables = []
-    page_offset = 0
 
-    for chunk_bytes in chunks:
-        document = _docai_process_chunk(client, processor_name, chunk_bytes)
-
+    for page_offset, document in cached_docs:
         for page in document.pages:
             real_page_num = page_offset + int(page.page_number)
             for table_idx, table in enumerate(page.tables, 1):
@@ -250,9 +279,274 @@ def extract_tables_with_docai(pdf_bytes: bytes) -> str:
                         + "\n".join(rows_md)
                     )
 
-        page_offset += len(document.pages)
-
     return "\n".join(md_tables)
+
+
+# ── Schema extraction with bounding boxes + confidence ─────────────────────
+
+def extract_schema_with_evidence(
+    pdf_bytes: bytes,
+    schema_fields: list[str],
+    llm_function: Callable,
+) -> list[dict]:
+    """
+    For each field in schema_fields, finds its value in the PDF and returns:
+        {
+          "field":       str,   # e.g. "Revenue (INR)"
+          "value":       str,   # e.g. "₹9,01,468 Crore"
+          "confidence":  int,   # 0-100
+          "page_number": int,   # 1-based page where found
+          "bbox":        dict,  # {x0, y0, x1, y1} as 0.0-1.0 fractions of page
+          "context":     str,   # surrounding sentence for hover tooltip
+        }
+
+    IMPORTANT: Reuses the DocAI documents already cached by extract_text_with_docai
+    (called earlier in the pipeline) so the PDF is NEVER sent to DocAI a second time.
+    """
+    err = _check_config()
+    if err:
+        return [
+            {"field": f, "value": "N/A", "confidence": 0,
+             "page_number": 0, "bbox": {}, "context": err}
+            for f in schema_fields
+        ]
+
+    import json as _json
+
+    ck = _cache_key(pdf_bytes)
+
+    # ── Try to reuse cached DocAI documents ──────────────────────────────
+    if ck in _DOCAI_DOC_CACHE:
+        print("   [EVIDENCE] ✅ Reusing cached DocAI documents — skipping re-processing.")
+        cached_docs = _DOCAI_DOC_CACHE[ck]   # list of (page_offset, document)
+    else:
+        # Cache miss: run DocAI now (only happens if called before extract_text_with_docai)
+        print("   [EVIDENCE] Cache miss — running DocAI for evidence extraction...")
+        processor_name = (
+            f"projects/{_PROJECT_ID}/locations/{_LOCATION}"
+            f"/processors/{_PROCESSOR_ID}"
+        )
+        client = documentai.DocumentProcessorServiceClient(
+            client_options={"api_endpoint": f"{_LOCATION}-documentai.googleapis.com"}
+        )
+        chunks = _split_pdf_bytes(pdf_bytes, _DOCAI_PAGE_LIMIT)
+        cached_docs = []
+        page_offset = 0
+        for chunk_idx, chunk_bytes in enumerate(chunks, 1):
+            print(f"   [EVIDENCE] Processing chunk {chunk_idx}/{len(chunks)}...")
+            document = _docai_process_chunk(client, processor_name, chunk_bytes)
+            cached_docs.append((page_offset, document))
+            page_offset += len(document.pages)
+        _DOCAI_DOC_CACHE[ck] = cached_docs
+
+    # ── Build token index from (cached) document objects ─────────────────
+    token_index: list[dict] = []
+    full_text_parts: list[str] = []
+
+    for page_offset, document in cached_docs:
+        full_text_parts.append(document.text)
+        for page in document.pages:
+            real_page = page_offset + int(page.page_number)
+            for token in (page.tokens or []):
+                segs = token.layout.text_anchor.text_segments
+                for seg in segs:
+                    s = int(seg.start_index or 0)
+                    e = int(seg.end_index or 0)
+                    tok_text = document.text[s:e]
+                    verts = token.layout.bounding_poly.normalized_vertices
+                    if len(verts) >= 4:
+                        xs = [v.x for v in verts]
+                        ys = [v.y for v in verts]
+                        bbox = {
+                            "x0": min(xs), "y0": min(ys),
+                            "x1": max(xs), "y1": max(ys),
+                        }
+                    else:
+                        bbox = {}
+                    token_index.append({
+                        "text": tok_text,
+                        "page": real_page,
+                        "bbox": bbox,
+                    })
+
+    full_text = "".join(full_text_parts)
+
+    # ── Build a LINE index from the token index ───────────────────────────
+    # Group tokens into lines by page + vertical band (y-center within 1% tolerance).
+    # Each line entry: {page, text (joined tokens), bbox (union of token bboxes)}
+    # This is what we search against — single tokens never contain full values.
+    line_index: list[dict] = []
+    if token_index:
+        # Sort tokens by page, then by y-center, then x
+        sorted_tokens = sorted(
+            token_index,
+            key=lambda t: (t["page"], round((t["bbox"].get("y0", 0) + t["bbox"].get("y1", 0)) / 2 * 200), t["bbox"].get("x0", 0))
+            if t["bbox"] else (t["page"], 0, 0)
+        )
+        # Group into lines: same page + y-center within 0.8% of page height
+        current_line_tokens: list[dict] = []
+        current_page = None
+        current_y_center = None
+
+        def _flush_line(line_tokens: list[dict]) -> None:
+            if not line_tokens:
+                return
+            texts  = [t["text"] for t in line_tokens if t["text"].strip()]
+            bboxes = [t["bbox"] for t in line_tokens if t["bbox"]]
+            if not texts or not bboxes:
+                return
+            x0 = min(b["x0"] for b in bboxes)
+            y0 = min(b["y0"] for b in bboxes)
+            x1 = max(b["x1"] for b in bboxes)
+            y1 = max(b["y1"] for b in bboxes)
+            line_index.append({
+                "page": line_tokens[0]["page"],
+                "text": " ".join(texts),
+                "bbox": {"x0": x0, "y0": y0, "x1": x1, "y1": y1},
+            })
+
+        for tok in sorted_tokens:
+            if not tok["bbox"]:
+                continue
+            pg = tok["page"]
+            yc = (tok["bbox"]["y0"] + tok["bbox"]["y1"]) / 2
+            if current_page != pg or current_y_center is None or abs(yc - current_y_center) > 0.008:
+                _flush_line(current_line_tokens)
+                current_line_tokens = [tok]
+                current_page = pg
+                current_y_center = yc
+            else:
+                current_line_tokens.append(tok)
+        _flush_line(current_line_tokens)
+
+    # ── Ask LLM to extract each field + confidence ────────────────────────
+    fields_list = "\n".join(f"  - {f}" for f in schema_fields)
+    smart = _smart_extract(full_text, schema_fields)
+
+    llm_prompt = f"""
+You are a precise financial data extraction engine.
+From the document text below, extract EACH of the following fields.
+
+For EACH field return a JSON object with:
+  "value"      : the extracted value (string), or "Not Found" if absent
+  "confidence" : integer 0-100 (how certain you are this is correct)
+  "page_hint"  : approximate page number where you found it (integer, 0 if unknown)
+  "context"    : the exact 6-12 word phrase from the document that contains this value
+                 (must be copy-pasted verbatim from the document text, not paraphrased)
+
+Respond with ONLY a JSON object mapping field name → extraction object.
+Example:
+{{
+  "Revenue (INR)": {{"value": "₹9,01,468 Crore", "confidence": 95, "page_hint": 12, "context": "Revenue from Operations 9,01,468 8,97,122"}},
+  "Net Worth (INR)": {{"value": "Not Found", "confidence": 0, "page_hint": 0, "context": ""}}
+}}
+
+### FIELDS TO EXTRACT:
+{fields_list}
+
+### DOCUMENT TEXT:
+{smart}
+"""
+    raw = llm_function(llm_prompt)
+
+    # ── Parse LLM JSON ────────────────────────────────────────────────────
+    try:
+        clean = re.sub(r"```(?:json)?|```", "", raw).strip()
+        llm_extractions: dict = _json.loads(clean)
+    except Exception:
+        llm_extractions = {}
+        for field in schema_fields:
+            m = re.search(rf'"{re.escape(field)}"\s*:\s*\{{[^}}]+\}}', raw)
+            if m:
+                try:
+                    llm_extractions[field] = _json.loads("{" + m.group(0).split("{", 1)[1])
+                except Exception:
+                    pass
+
+    # ── Match each field to a line in the line_index → get real bbox ─────
+    def _best_line_match(search_phrase: str, page_hint: int) -> dict | None:
+        """
+        Find the line in line_index whose text best overlaps with search_phrase.
+        Strategy:
+          1. Normalize both strings (strip ₹ , . spaces, lowercase)
+          2. Score = number of search_phrase words (≥2 chars) found in line text
+          3. Among ties, prefer the line closest to page_hint
+        Returns the best matching line dict or None.
+        """
+        if not search_phrase or not line_index:
+            return None
+
+        def _norm(s: str) -> str:
+            return re.sub(r"[₹,.\s]+", " ", s).lower().strip()
+
+        phrase_norm = _norm(search_phrase)
+        phrase_words = [w for w in phrase_norm.split() if len(w) >= 2]
+        if not phrase_words:
+            return None
+
+        best_score = 0
+        best_dist  = 9999
+        best_line  = None
+
+        for line in line_index:
+            line_norm = _norm(line["text"])
+            score = sum(1 for w in phrase_words if w in line_norm)
+            if score == 0:
+                continue
+            dist = abs(line["page"] - page_hint) if page_hint else 0
+            # Prefer higher score; break ties by proximity to page_hint
+            if score > best_score or (score == best_score and dist < best_dist):
+                best_score = score
+                best_dist  = dist
+                best_line  = line
+
+        # Require at least 2 words to match to avoid false positives on short phrases
+        return best_line if best_score >= 2 else None
+
+    evidence: list[dict] = []
+
+    for field in schema_fields:
+        entry = llm_extractions.get(field, {})
+        value      = entry.get("value", "Not Found")
+        confidence = int(entry.get("confidence", 0))
+        page_hint  = int(entry.get("page_hint", 0))
+        context    = entry.get("context", "")
+
+        bbox       = {}
+        found_page = page_hint
+
+        if value and value not in ("Not Found", "N/A", ""):
+            # Try context phrase first (most reliable — verbatim from document)
+            match = _best_line_match(context, page_hint)
+
+            # Fallback: try matching the value itself if context didn't work
+            if not match:
+                match = _best_line_match(value, page_hint)
+
+            if match:
+                found_page = match["page"]
+                # Expand bbox horizontally to full page width so the
+                # highlight covers the entire table row, not just the matched words
+                b = match["bbox"]
+                bbox = {
+                    "x0": 0.0,            # start at left margin
+                    "y0": max(0.0, b["y0"] - 0.005),   # tiny padding above
+                    "x1": 1.0,            # end at right margin
+                    "y1": min(1.0, b["y1"] + 0.005),   # tiny padding below
+                }
+
+        evidence.append({
+            "field":       field,
+            "value":       value,
+            "confidence":  confidence,
+            "page_number": found_page,
+            "bbox":        bbox,
+            "context":     context,
+        })
+        hit = "✅" if bbox else "❌ no bbox"
+        print(f"   [EVIDENCE] {field}: '{value}' | conf={confidence}% | page={found_page} | bbox={hit}")
+
+    return evidence
 
 
 # ── Fallback helpers ────────────────────────────────────────────────────────
