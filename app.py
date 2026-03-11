@@ -2,15 +2,47 @@ import streamlit as st
 import time
 import re
 import json
+import os
 from datetime import datetime
 from fpdf import FPDF
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # --- BACKEND IMPORTS (reused from existing modules) ---
 from src.research_agent.llm_router import analyze_text_with_fallback
 from src.decision_engine.ml_scorer import calculate_risk_score
-from src.data_ingestor.unstructured_parser import analyze_pdf_risks, analyze_pdf_risks_with_schema
 from src.data_ingestor.structured_parser import analyze_structured_data, analyze_structured_data_with_schema
 from src.research_agent.web_crawler import crawl_company_news
+
+# ── PDF OCR backend selector ───────────────────────────────────────────────
+# Set USE_GOOGLE_DOCAI=true in .env to switch from PyMuPDF → Google Document AI.
+# Falls back to PyMuPDF automatically if the SDK / credentials are not set up.
+_USE_DOCAI = os.getenv("USE_GOOGLE_DOCAI", "false").lower() == "true"
+
+if _USE_DOCAI:
+    try:
+        from src.data_ingestor.docai_parser import (
+            analyze_pdf_risks,
+            analyze_pdf_risks_with_schema,
+        )
+        _OCR_BACKEND = "Google Document AI"
+    except Exception as _docai_import_err:
+        st.warning(
+            f"⚠️ Google Document AI import failed ({_docai_import_err}). "
+            "Falling back to PyMuPDF."
+        )
+        from src.data_ingestor.unstructured_parser import (
+            analyze_pdf_risks,
+            analyze_pdf_risks_with_schema,
+        )
+        _OCR_BACKEND = "PyMuPDF (fallback)"
+else:
+    from src.data_ingestor.unstructured_parser import (
+        analyze_pdf_risks,
+        analyze_pdf_risks_with_schema,
+    )
+    _OCR_BACKEND = "PyMuPDF"
 
 # ─────────────────────────────────────────────
 #  PAGE CONFIG
@@ -603,6 +635,17 @@ with st.sidebar:
       </div>
     </div>
     """, unsafe_allow_html=True)
+
+    # OCR backend badge
+    _ocr_icon  = "🧠" if "Document AI" in _OCR_BACKEND else "📄"
+    _ocr_color = "#10a870" if "Document AI" in _OCR_BACKEND else "#5a8ab8"
+    st.markdown(
+        f'<div style="margin-top:10px;padding:6px 10px;border-radius:7px;'
+        f'background:#0a1a2a;border:1px solid #1a3050;font-size:10px;'
+        f'color:{_ocr_color};font-weight:600;letter-spacing:0.05em;">'
+        f'{_ocr_icon}&nbsp; OCR: {_OCR_BACKEND}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 
