@@ -1,0 +1,9 @@
+streamlit
+litellm
+python-dotenv
+pandas
+fpdf2
+pymupdf
+flashtext
+requests
+tavily-python
