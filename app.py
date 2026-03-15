@@ -3,6 +3,8 @@ import time
 import re
 import json
 import os
+import base64
+import streamlit.components.v1 as _components
 from datetime import datetime
 from fpdf import FPDF
 from dotenv import load_dotenv
@@ -16,8 +18,6 @@ from src.data_ingestor.structured_parser import analyze_structured_data, analyze
 from src.research_agent.web_crawler import crawl_company_news
 
 # ── PDF OCR backend selector ───────────────────────────────────────────────
-# Set USE_GOOGLE_DOCAI=true in .env to switch from PyMuPDF → Google Document AI.
-# Falls back to PyMuPDF automatically if the SDK / credentials are not set up.
 _USE_DOCAI = os.getenv("USE_GOOGLE_DOCAI", "false").lower() == "true"
 
 if _USE_DOCAI:
@@ -44,6 +44,20 @@ else:
     )
     _OCR_BACKEND = "PyMuPDF"
 
+# ── Spline scene loader — hero orb ────────────────────────────────────────
+_SPLINE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "scene.splinecode")
+_SPLINE_B64 = ""
+if os.path.exists(_SPLINE_PATH):
+    with open(_SPLINE_PATH, "rb") as _f:
+        _SPLINE_B64 = base64.b64encode(_f.read()).decode()
+
+# ── Spline scene loader — Stage 4 robot ───────────────────────────────────
+_ROBOT_SPLINE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "nexbot_robot_character_concept.spline")
+_ROBOT_SPLINE_B64 = ""
+if os.path.exists(_ROBOT_SPLINE_PATH):
+    with open(_ROBOT_SPLINE_PATH, "rb") as _f:
+        _ROBOT_SPLINE_B64 = base64.b64encode(_f.read()).decode()
+
 # ─────────────────────────────────────────────
 #  PAGE CONFIG
 # ─────────────────────────────────────────────
@@ -55,11 +69,11 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────
-#  CSS — TENSOR THEME (Light Mode, High Contrast)
+#  CSS — DARK GLASSMORPHIC THEME (Spline-matched)
 # ─────────────────────────────────────────────
 st.markdown("""
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800;900&family=DM+Mono:wght@400;500&display=swap');
 
   /* ══ 1. HIDE STREAMLIT TOP HEADER ══ */
   header[data-testid="stHeader"] { display: none !important; height: 0px !important; }
@@ -72,36 +86,34 @@ st.markdown("""
 
   /* ══ LAYOUT ══ */
   .block-container {
-    padding-top: 2rem !important;
+    padding-top: 1.5rem !important;
     padding-left: 2.4rem !important;
     padding-right: 2.4rem !important;
-    max-width: 1360px !important;
-    background-color: #ffffff !important;
+    max-width: 1400px !important;
+    background: transparent !important;
   }
 
-  /* ══ FULL WHITE BACKGROUND ══ */
-  html, body                              { background-color: #ffffff !important; }
-  .stApp                                  { background-color: #ffffff !important; }
-  .main                                   { background-color: #ffffff !important; }
-  section[data-testid="stMain"]           { background-color: #ffffff !important; }
-  div[data-testid="stMainBlockContainer"] { background-color: #ffffff !important; }
+  /* ══ DEEP DARK BACKGROUND ══ */
+  html, body { background-color: #040a16 !important; }
+  .stApp { background-color: #040a16 !important; }
+  .main { background-color: transparent !important; }
+  section[data-testid="stMain"] { background-color: #040a16 !important; }
+  div[data-testid="stMainBlockContainer"] { background-color: transparent !important; }
 
-  /* ══ GLOBAL FONT & BASE TEXT COLOR ══
-     Every element in .stApp defaults to dark navy.
-     Specific overrides below restore white where needed. */
+  /* ══ GLOBAL FONT & BASE TEXT COLOR ══ */
   html, body, .stApp, .stApp * {
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
-    color: #1a2340;
+    font-family: 'Manrope', sans-serif !important;
+    color: #c8dff5;
   }
-  /* Carve-out: never let the global rule corrupt Streamlit's SVG/Material icon spans */
+  /* Carve-out: icon spans */
   details > summary [data-testid="stExpanderToggleIcon"],
   details > summary [data-testid="stExpanderToggleIcon"] * {
-    color: #1a5fd4 !important;
-    font-size: 24px !important; /* Often needed to properly size Material Icons */
+    color: #00d4ff !important;
+    font-size: 24px !important;
     font-weight: normal !important;
-    font-family: "Material Symbols Rounded", "Material Icons", sans-serif !important; /* Restores the icon font */
+    font-family: "Material Symbols Rounded", "Material Icons", sans-serif !important;
   }
-  h1, h2, h3, h4, h5, h6 { color: #0d1f3c !important; }
+  h1, h2, h3, h4, h5, h6 { color: #e8f4ff !important; }
 
   /* ══ INPUT FIELDS ══ */
   .stTextInput > div > div > input,
@@ -110,37 +122,37 @@ st.markdown("""
   [data-baseweb="input"] input,
   [data-baseweb="base-input"] input,
   [data-baseweb="textarea"] textarea {
-    background-color: #ffffff !important;
-    border: 1.5px solid #c5d5ea !important;
-    color: #0d1f3c !important;
+    background-color: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(0,212,255,0.2) !important;
+    color: #e8f4ff !important;
     border-radius: 8px !important;
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    font-family: 'Manrope', sans-serif !important;
     font-size: 14px !important;
-    box-shadow: 0 1px 4px rgba(26,63,130,0.05) !important;
+    box-shadow: none !important;
   }
   .stTextInput > div > div > input::placeholder,
   .stNumberInput > div > div > input::placeholder,
   .stTextArea > div > div > textarea::placeholder,
   [data-baseweb="input"] input::placeholder,
   [data-baseweb="textarea"] textarea::placeholder {
-    color: #6a88aa !important;
+    color: rgba(0,212,255,0.35) !important;
     opacity: 1 !important;
   }
   .stTextInput > div > div > input:focus,
   .stNumberInput > div > div > input:focus,
   .stTextArea > div > div > textarea:focus {
-    border-color: #1a5fd4 !important;
-    box-shadow: 0 0 0 3px rgba(26,95,212,0.10) !important;
+    border-color: #00d4ff !important;
+    box-shadow: 0 0 0 3px rgba(0,212,255,0.12) !important;
   }
   .stTextInput label, .stNumberInput label,
   .stTextArea label, .stFileUploader label,
   label, .stWidgetLabel, [data-testid="stWidgetLabel"] p {
     font-weight: 600 !important; font-size: 13px !important;
-    color: #2a3a5c !important;
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    color: #8ab0cf !important;
+    font-family: 'Manrope', sans-serif !important;
   }
-            
-/* ══ RESTORE MATERIAL ICONS (FIX FOR TEXT OVERLAP) ══ */
+
+  /* ══ RESTORE MATERIAL ICONS ══ */
   .stApp span[class*="material"],
   .stApp [data-testid="stExpanderToggleIcon"],
   .stApp [data-testid="stExpanderToggleIcon"] *,
@@ -150,27 +162,27 @@ st.markdown("""
       font-weight: normal !important;
       font-style: normal !important;
       font-size: 24px !important;
-      text-transform: none !important;      /* Prevents uppercase from breaking the ligature */
-      letter-spacing: normal !important;    /* Prevents spacing from breaking the ligature */
+      text-transform: none !important;
+      letter-spacing: normal !important;
       word-wrap: normal !important;
       white-space: nowrap !important;
-      color: #1a5fd4 !important;            /* Keeps your theme's blue tint */
+      color: #00d4ff !important;
   }
 
   /* ══ NUMBER INPUT STEPPER ══ */
   .stNumberInput button,
   div[data-testid="stNumberInput"] button {
-    background-color: #eef4ff !important;
-    border: 1.5px solid #c5d5ea !important;
-    color: #1a5fd4 !important;
+    background-color: rgba(0,212,255,0.08) !important;
+    border: 1px solid rgba(0,212,255,0.2) !important;
+    color: #00d4ff !important;
     border-radius: 6px !important;
   }
 
   /* ══ SELECTBOX ══ */
   [data-testid="stSelectbox"] > div > div,
   div[data-baseweb="select"] > div:first-child {
-    background-color: #ffffff !important;
-    border: 1.5px solid #c5d5ea !important;
+    background-color: rgba(255,255,255,0.05) !important;
+    border: 1px solid rgba(0,212,255,0.2) !important;
     border-radius: 8px !important;
   }
   [data-testid="stSelectbox"] span,
@@ -178,35 +190,40 @@ st.markdown("""
   [data-testid="stSelectbox"] p,
   div[data-baseweb="select"] span,
   div[data-baseweb="select"] div,
-  div[data-baseweb="select"] input { color: #0d1f3c !important; }
+  div[data-baseweb="select"] input { color: #e8f4ff !important; }
 
   /* Dropdown popup portal */
-  [data-baseweb="popover"], [data-baseweb="popover"] > div { background-color: #ffffff !important; }
+  [data-baseweb="popover"], [data-baseweb="popover"] > div { background-color: #0d1a38 !important; }
   [data-baseweb="menu"], ul[data-baseweb="menu"] {
-    background-color: #ffffff !important;
-    border: 1.5px solid #c5d5ea !important;
+    background-color: #0d1a38 !important;
+    border: 1px solid rgba(0,212,255,0.2) !important;
     border-radius: 10px !important;
-    box-shadow: 0 8px 28px rgba(26,60,120,0.12) !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,212,255,0.1) !important;
   }
   [data-baseweb="menu"] li, [role="option"] {
-    background-color: #ffffff !important;
-    color: #0d1f3c !important;
+    background-color: #0d1a38 !important;
+    color: #c8dff5 !important;
     font-size: 13px !important;
   }
   [role="option"]:hover, [data-baseweb="menu"] li:hover {
-    background-color: #e4edfc !important; color: #1a5fd4 !important;
+    background-color: rgba(0,212,255,0.1) !important; color: #00d4ff !important;
   }
   [role="option"] *, [data-baseweb="menu"] li * {
-    color: #0d1f3c !important; background-color: transparent !important;
+    color: #c8dff5 !important; background-color: transparent !important;
   }
-  [role="option"]:hover *, [data-baseweb="menu"] li:hover * { color: #1a5fd4 !important; }
+  [role="option"]:hover *, [data-baseweb="menu"] li:hover * { color: #00d4ff !important; }
+
+  /* ══ SLIDER ══ */
+  .stSlider [data-baseweb="slider"] [role="slider"] { background: #00d4ff !important; border-color: #00d4ff !important; }
+  .stSlider [data-baseweb="slider"] div[data-testid="stSliderTrackFill"] { background: linear-gradient(90deg, #00d4ff, #7b2fff) !important; }
+  .stSlider [data-baseweb="slider"] div { background-color: rgba(255,255,255,0.1) !important; }
 
   /* ══ FILE UPLOADER ══ */
   [data-testid="stFileUploadDropzone"],
   [data-testid="stFileUploaderDropzone"] {
-    background-color: #DCDCDC !important;
-    border: 2px dashed #a0a8b8 !important;
-    border-radius: 10px !important;
+    background-color: rgba(0,212,255,0.04) !important;
+    border: 2px dashed rgba(0,212,255,0.3) !important;
+    border-radius: 12px !important;
     padding: 18px 16px !important;
   }
   [data-testid="stFileUploadDropzone"] p,
@@ -216,208 +233,272 @@ st.markdown("""
   [data-testid="stFileUploaderDropzone"] span,
   [data-testid="stFileUploaderDropzone"] p,
   [data-testid="stFileUploaderDropzone"] small,
-  [data-testid="stFileUploaderDropzone"] div { color: #1a2c48 !important; }
+  [data-testid="stFileUploaderDropzone"] div { color: #8ab0cf !important; }
   [data-testid="stFileUploadDropzone"] button,
   [data-testid="stFileUploaderDropzone"] button {
-    background: #ffffff !important;
-    border: 1.5px solid #1a5fd4 !important;
-    color: #1a5fd4 !important;
-    border-radius: 7px !important; font-weight: 600 !important;
+    background: rgba(0,212,255,0.08) !important;
+    border: 1px solid rgba(0,212,255,0.4) !important;
+    color: #00d4ff !important;
+    border-radius: 7px !important; font-weight: 700 !important;
   }
   /* Uploaded file rows */
   [data-testid="stFileUploaderFile"],
   [data-testid="stFileUploaderFileData"] {
-    background-color: #ffffff !important;
-    border: 1px solid #dce8f8 !important; border-radius: 8px !important;
+    background-color: rgba(255,255,255,0.04) !important;
+    border: 1px solid rgba(0,212,255,0.15) !important; border-radius: 8px !important;
   }
-  [data-testid="stFileUploaderFile"] * { color: #0d1f3c !important; background-color: transparent !important; }
+  [data-testid="stFileUploaderFile"] * { color: #c8dff5 !important; background-color: transparent !important; }
 
   /* ══ BUTTONS ══ */
   button[kind="primary"] {
-    background: linear-gradient(135deg, #1a5fd4 0%, #0d3fa8 100%) !important;
+    background: linear-gradient(135deg, #00aadd 0%, #7b2fff 100%) !important;
     color: #ffffff !important;
     font-weight: 700 !important; font-size: 14px !important;
     border: none !important; border-radius: 10px !important;
-    box-shadow: 0 4px 14px rgba(26,95,212,0.28) !important;
+    box-shadow: 0 4px 20px rgba(0,212,255,0.25) !important;
+    transition: all 0.2s !important;
+  }
+  button[kind="primary"]:hover {
+    box-shadow: 0 6px 28px rgba(0,212,255,0.4) !important;
+    transform: translateY(-1px) !important;
   }
   button[kind="primary"] span, button[kind="primary"] p { color: #ffffff !important; }
   button[kind="secondary"] {
-    background: #ffffff !important; border: 1.5px solid #c5d5ea !important;
-    color: #4a6a8a !important; border-radius: 10px !important;
+    background: rgba(255,255,255,0.06) !important; 
+    border: 1px solid rgba(0,212,255,0.2) !important;
+    color: #8ab0cf !important; border-radius: 10px !important;
+  }
+  button[kind="secondary"]:hover {
+    background: rgba(0,212,255,0.08) !important;
+    border-color: rgba(0,212,255,0.4) !important;
+    color: #00d4ff !important;
   }
   [data-testid="stDownloadButton"] > button {
-    background: linear-gradient(135deg, #0b8a5a 0%, #076e48 100%) !important;
+    background: linear-gradient(135deg, #00b87a 0%, #007a52 100%) !important;
     color: #ffffff !important; font-weight: 700 !important;
     border: none !important; border-radius: 10px !important;
-    box-shadow: 0 4px 14px rgba(11,138,90,0.28) !important;
+    box-shadow: 0 4px 16px rgba(0,184,122,0.25) !important;
   }
   [data-testid="stDownloadButton"] > button span { color: #ffffff !important; }
 
   /* ══ EXPANDER ══ */
   details {
-    background-color: #ffffff !important;
-    border: 1px solid #d4e4f7 !important;
-    border-radius: 10px !important;
+    background-color: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(0,212,255,0.12) !important;
+    border-radius: 12px !important;
   }
   details > summary {
-    background-color: #eaf1fb !important;
-    border-radius: 10px !important;
+    background-color: rgba(0,212,255,0.05) !important;
+    border-radius: 12px !important;
     padding: 10px 14px !important;
     cursor: pointer !important;
-    list-style: none !important;   /* remove browser default triangle */
+    list-style: none !important;
   }
-  /* Style only the text label paragraph inside the summary */
   details > summary > div > div > p,
   details > summary > div > div > span:not([data-testid="stExpanderToggleIcon"]) {
-    color: #0d1f3c !important;
+    color: #e8f4ff !important;
     font-weight: 600 !important;
     background-color: transparent !important;
   }
-  /* Arrow toggle icon — let Streamlit render its own SVG, just tint it blue */
-  details > summary [data-testid="stExpanderToggleIcon"] {
-    color: #1a5fd4 !important;
-    flex-shrink: 0 !important;
-  }
+  details > summary [data-testid="stExpanderToggleIcon"] { color: #00d4ff !important; flex-shrink: 0 !important; }
   details > summary [data-testid="stExpanderToggleIcon"] svg {
-    width: 18px !important;
-    height: 18px !important;
-    color: #1a5fd4 !important;
-    fill: none !important;
-    stroke: #1a5fd4 !important;
-    display: block !important;
-    overflow: visible !important;
+    width: 18px !important; height: 18px !important;
+    color: #00d4ff !important; fill: none !important;
+    stroke: #00d4ff !important; display: block !important;
   }
-  details > div { background-color: #ffffff !important; }
+  details > div { background-color: transparent !important; }
 
   /* ══ TABS ══ */
   .stTabs [data-baseweb="tab-list"] {
-    background-color: #eef4fc !important; border-radius: 10px !important;
-    padding: 4px !important; border: 1.5px solid #cdddf0 !important;
+    background-color: rgba(255,255,255,0.04) !important; border-radius: 12px !important;
+    padding: 4px !important; border: 1px solid rgba(0,212,255,0.12) !important;
   }
   .stTabs [data-baseweb="tab"] {
-    color: #4a6080 !important; border-radius: 8px !important;
+    color: #6a8aaa !important; border-radius: 8px !important;
     font-weight: 600 !important; font-size: 13px !important; background: transparent !important;
   }
   .stTabs [aria-selected="true"] {
-    color: #1a5fd4 !important; background-color: #ffffff !important;
-    box-shadow: 0 2px 8px rgba(26,95,212,0.14) !important;
+    color: #00d4ff !important; 
+    background: rgba(0,212,255,0.1) !important;
+    box-shadow: 0 2px 8px rgba(0,212,255,0.15) !important;
   }
 
-  /* ══ TABLES (markdown rendered) ══ */
+  /* ══ TABLES ══ */
   .stApp table {
     width: 100%; border-collapse: separate; border-spacing: 0; margin-bottom: 20px;
-    background-color: #ffffff; border-radius: 12px; overflow: hidden;
-    box-shadow: 0 2px 10px rgba(26,63,130,0.08); border: 1.5px solid #cdddf0;
+    background-color: rgba(255,255,255,0.02); border-radius: 12px; overflow: hidden;
+    box-shadow: 0 2px 20px rgba(0,0,0,0.3); border: 1px solid rgba(0,212,255,0.12);
   }
   .stApp table th {
-    background: linear-gradient(135deg, #0d2860, #1a5fd4) !important;
-    color: #ffffff !important; padding: 13px 16px;
+    background: linear-gradient(135deg, #040a16, #0d1a38) !important;
+    color: #00d4ff !important; padding: 13px 16px;
     font-size: 11px; letter-spacing: 0.12em; font-weight: 700; text-transform: uppercase;
+    border-bottom: 1px solid rgba(0,212,255,0.2) !important;
   }
   .stApp table td {
-    padding: 12px 16px; border-bottom: 1px solid #edf3fb;
-    font-size: 14px; color: #1a2c48 !important; background-color: #ffffff !important;
+    padding: 12px 16px; border-bottom: 1px solid rgba(0,212,255,0.06);
+    font-size: 14px; color: #c8dff5 !important; background-color: transparent !important;
   }
-  .stApp table tr:hover td { background-color: #f3f8ff !important; }
+  .stApp table tr:hover td { background-color: rgba(0,212,255,0.04) !important; }
 
   /* ══ SIDEBAR ══ */
   div[data-testid="stSidebarContent"] {
-    background: linear-gradient(180deg, #0c1c38 0%, #081426 100%) !important;
-    border-right: 1px solid #192e50 !important;
+    background: linear-gradient(180deg, #04091a 0%, #020710 100%) !important;
+    border-right: 1px solid rgba(0,212,255,0.1) !important;
   }
   div[data-testid="stSidebarContent"] p,
   div[data-testid="stSidebarContent"] span,
   div[data-testid="stSidebarContent"] div,
-  div[data-testid="stSidebarContent"] label { color: #c8dff5 !important; }
+  div[data-testid="stSidebarContent"] label { color: #8ab0cf !important; }
   div[data-testid="stSidebarContent"] h1,
   div[data-testid="stSidebarContent"] h2,
-  div[data-testid="stSidebarContent"] h3 { color: #ffffff !important; }
-  div[data-testid="stSidebarContent"] button { background: rgba(255,255,255,0.07) !important; border: 1px solid rgba(255,255,255,0.12) !important; border-radius: 8px !important; }
-  div[data-testid="stSidebarContent"] button span { color: #e8f4ff !important; font-size: 13px !important; }
+  div[data-testid="stSidebarContent"] h3 { color: #e8f4ff !important; }
+  div[data-testid="stSidebarContent"] button {
+    background: rgba(0,212,255,0.06) !important;
+    border: 1px solid rgba(0,212,255,0.15) !important; border-radius: 8px !important;
+  }
+  div[data-testid="stSidebarContent"] button:hover {
+    background: rgba(0,212,255,0.12) !important;
+    border-color: rgba(0,212,255,0.3) !important;
+  }
+  div[data-testid="stSidebarContent"] button span { color: #c8e8ff !important; font-size: 13px !important; }
 
   /* ══ ALERTS ══ */
-  .stInfo > div  { background-color: #eef4ff !important; border: 1.5px solid #aacaf8 !important; color: #1a3a7a !important; border-radius: 10px !important; }
-  .stSuccess > div { background-color: #ecfbf4 !important; border: 1.5px solid #88d8b8 !important; color: #0a5038 !important; border-radius: 10px !important; }
-  .stWarning > div { background-color: #fffbec !important; border: 1.5px solid #f0d060 !important; color: #7a5200 !important; border-radius: 10px !important; }
+  .stInfo > div { 
+    background-color: rgba(0,212,255,0.07) !important; 
+    border: 1px solid rgba(0,212,255,0.25) !important; 
+    color: #a0d4f0 !important; border-radius: 10px !important; 
+  }
+  .stSuccess > div { 
+    background-color: rgba(0,200,120,0.07) !important; 
+    border: 1px solid rgba(0,200,120,0.25) !important; 
+    color: #80e0b8 !important; border-radius: 10px !important; 
+  }
+  .stWarning > div { 
+    background-color: rgba(255,180,0,0.07) !important; 
+    border: 1px solid rgba(255,180,0,0.25) !important; 
+    color: #e0c060 !important; border-radius: 10px !important; 
+  }
+  .stError > div {
+    background-color: rgba(255,80,80,0.07) !important;
+    border: 1px solid rgba(255,80,80,0.25) !important;
+    color: #ffaaaa !important; border-radius: 10px !important;
+  }
   .stApp [data-testid="stNotification"] p,
-  .stApp [data-testid="stNotification"] span { color: #0d1f3c !important; }
+  .stApp [data-testid="stNotification"] span { color: #c8dff5 !important; }
 
   /* ══ PROGRESS BAR ══ */
   .stProgress > div > div > div {
-    background: linear-gradient(90deg, #0c1c38, #1a5fd4) !important; border-radius: 6px;
+    background: linear-gradient(90deg, #00d4ff, #7b2fff) !important; border-radius: 6px;
   }
-  .stProgress > div > div { background-color: #cdddf0 !important; border-radius: 6px; }
-  .stProgress p { color: #0c1c38 !important; font-weight: 700 !important; font-size: 13px !important; }
+  .stProgress > div > div { background-color: rgba(255,255,255,0.08) !important; border-radius: 6px; }
+  .stProgress p { color: #e8f4ff !important; font-weight: 700 !important; font-size: 13px !important; }
 
   /* ══ LOG BOX ══ */
   .research-log {
-    background: #f4f8ff; border: 1.5px solid #ccddf0;
-    border-left: 4px solid #1a5fd4; border-radius: 10px;
+    background: rgba(0,212,255,0.04); border: 1px solid rgba(0,212,255,0.15);
+    border-left: 3px solid #00d4ff; border-radius: 10px;
     padding: 16px 18px; font-family: 'DM Mono', monospace;
-    font-size: 12px; line-height: 1.85; color: #243050 !important;
+    font-size: 12px; line-height: 1.85; color: #8ab8d4 !important;
     white-space: pre-wrap; max-height: 400px; overflow-y: auto;
   }
-  .research-log p, .research-log span, .research-log div { color: #243050 !important; }
+  .research-log p, .research-log span, .research-log div { color: #8ab8d4 !important; }
 
   /* ══ METRIC CARD ══ */
   .metric-card {
-    background: #ffffff; border: 1.5px solid #d8e8f8; border-radius: 14px;
+    background: rgba(255,255,255,0.04); 
+    border: 1px solid rgba(0,212,255,0.12); 
+    border-radius: 16px;
     padding: 20px 22px; margin-bottom: 14px;
-    box-shadow: 0 2px 12px rgba(26,63,130,0.07); overflow: hidden;
-    transition: box-shadow 0.2s, transform 0.2s;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3); overflow: hidden;
+    transition: box-shadow 0.3s, transform 0.2s;
+    backdrop-filter: blur(8px);
+  }
+  .metric-card:hover {
+    box-shadow: 0 8px 32px rgba(0,212,255,0.1);
+    transform: translateY(-2px);
   }
   .metric-card * { color: inherit; }
 
   /* ══ STEP INDICATOR ══ */
   .step-indicator-active {
-    background: linear-gradient(135deg, #1a5fd4, #3ab0ff) !important;
+    background: linear-gradient(135deg, #00d4ff, #7b2fff) !important;
     color: white !important; border-radius: 50%; width: 36px; height: 36px;
     display: inline-flex; align-items: center; justify-content: center;
-    font-weight: 800; font-size: 14px; box-shadow: 0 3px 10px rgba(26,95,212,0.4);
+    font-weight: 800; font-size: 14px; box-shadow: 0 3px 14px rgba(0,212,255,0.45);
   }
   .step-indicator-done {
-    background: #0b8a5a !important; color: white !important; border-radius: 50%;
+    background: #00b87a !important; color: white !important; border-radius: 50%;
     width: 36px; height: 36px; display: inline-flex; align-items: center;
     justify-content: center; font-weight: 800; font-size: 14px;
+    box-shadow: 0 3px 10px rgba(0,184,122,0.4);
   }
   .step-indicator-pending {
-    background: #e0e8f4 !important; color: #9ab0c8 !important; border-radius: 50%;
+    background: rgba(255,255,255,0.08) !important; color: #4a6a8a !important; border-radius: 50%;
     width: 36px; height: 36px; display: inline-flex; align-items: center;
     justify-content: center; font-weight: 800; font-size: 14px;
+    border: 1px solid rgba(255,255,255,0.1);
   }
-  .step-connector-done { flex: 1; height: 3px; background: #0b8a5a; border-radius: 2px; }
-  .step-connector-pending { flex: 1; height: 3px; background: #e0e8f4; border-radius: 2px; }
+  .step-connector-done { flex: 1; height: 2px; background: linear-gradient(90deg, #00b87a, #00d4ff); border-radius: 2px; }
+  .step-connector-pending { flex: 1; height: 2px; background: rgba(255,255,255,0.08); border-radius: 2px; }
 
   /* ══ MISC ══ */
-  hr, [data-testid="stDivider"] { border-color: #e0eaf8 !important; }
+  hr, [data-testid="stDivider"] { border-color: rgba(0,212,255,0.1) !important; }
 
   /* ══ TOOLTIP ══ */
   div[data-testid="stTooltipContent"] {
-    background-color: #0c1c38 !important;
-    border: 1px solid #1a5fd4 !important; border-radius: 6px !important;
+    background-color: #0d1a38 !important;
+    border: 1px solid rgba(0,212,255,0.3) !important; border-radius: 8px !important;
   }
-  div[data-testid="stTooltipContent"] * { color: #ffffff !important; font-size: 13px !important; }
+  div[data-testid="stTooltipContent"] * { color: #e8f4ff !important; font-size: 13px !important; }
+
+  /* ══ CAPTION / SMALL TEXT ══ */
+  .stCaption, [data-testid="stCaptionContainer"] p { color: #5a7a9a !important; }
+
+  /* ══ FORM ══ */
+  [data-testid="stForm"] {
+    background: rgba(255,255,255,0.02) !important;
+    border: 1px solid rgba(0,212,255,0.08) !important;
+    border-radius: 14px !important;
+    padding: 24px !important;
+  }
+  [data-testid="stFormSubmitButton"] button {
+    background: linear-gradient(135deg, #00aadd 0%, #7b2fff 100%) !important;
+    color: #fff !important;
+  }
+
+  /* ══ METRIC WIDGET ══ */
+  [data-testid="stMetric"] {
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(0,212,255,0.1) !important;
+    border-radius: 10px !important;
+    padding: 12px 16px !important;
+  }
+  [data-testid="stMetricValue"] { color: #e8f4ff !important; }
+  [data-testid="stMetricLabel"] { color: #6a8aaa !important; }
+
+  /* ══ COLUMNS GAP ══ */
+  [data-testid="column"] { gap: 16px; }
 
 </style>
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────
-#  SECTION HEADER HELPER (Tensor Theme)
+#  SECTION HEADER HELPER (Dark Glassmorphic)
 # ─────────────────────────────────────────────
-def section_header(num, icon, title, color="#1a5fd4"):
+def section_header(num, icon, title, color="#00d4ff"):
     st.markdown(f"""
     <div style="display:flex;align-items:center;gap:12px;margin:28px 0 16px 0;">
       <div style="width:32px;height:32px;
-        background:linear-gradient(135deg,{color},{color}bb);
+        background:linear-gradient(135deg,{color},{color}88);
         border-radius:8px;display:flex;align-items:center;justify-content:center;
         color:#fff;font-weight:800;font-size:14px;flex-shrink:0;
-        box-shadow:0 3px 10px {color}44;">{num}</div>
+        box-shadow:0 3px 14px {color}44;">{num}</div>
       <div style="font-size:11px;letter-spacing:0.22em;color:{color};font-weight:700;
         text-transform:uppercase;padding-bottom:7px;
-        border-bottom:2px solid #dce8f5;flex:1;">{icon}&nbsp;&nbsp;{title}</div>
+        border-bottom:1px solid rgba(0,212,255,0.15);flex:1;">{icon}&nbsp;&nbsp;{title}</div>
     </div>
     """, unsafe_allow_html=True)
-
 
 
 # ─────────────────────────────────────────────
@@ -430,7 +511,6 @@ STAGES = {
     4: ("📊", "Pre-Cognitive Analysis"),
 }
 
-# These are the 5 core accepted document types; "Other (Custom)" catches anything else
 ACCEPTED_DOC_TYPES = [
     "ALM (Asset Liability Management)",
     "Shareholding Pattern",
@@ -440,7 +520,6 @@ ACCEPTED_DOC_TYPES = [
     "Other (Custom)",
 ]
 
-# Default extraction schema per document type
 DEFAULT_SCHEMAS = {
     "ALM (Asset Liability Management)": [
         "Total Assets", "Total Liabilities", "Maturity Buckets",
@@ -484,49 +563,30 @@ SECTORS = [
 # ─────────────────────────────────────────────
 def init_session_state():
     defaults = {
-        # ── Navigation ──
         "current_stage": 1,
-
-        # ── Stage 1: Entity & Loan Onboarding ──
         "entity_data": {
-            "company_name": "",
-            "cin": "",
-            "pan": "",
-            "sector": "",
-            "annual_turnover": 0,
-            "ceo_name": "",
+            "company_name": "", "cin": "", "pan": "", "sector": "",
+            "annual_turnover": 0, "ceo_name": "",
         },
         "loan_data": {
-            "loan_type": "",
-            "requested_amount": 0,
-            "tenure_months": 12,
-            "proposed_interest_rate": 0.0,
-            "purpose": "",
+            "loan_type": "", "requested_amount": 0, "tenure_months": 12,
+            "proposed_interest_rate": 0.0, "purpose": "",
         },
-
-        # ── Stage 2: Document Upload ──
-        "uploaded_files_meta": [],   # list of UploadedFile objects
-
-        # ── Stage 3: Classification & Schema ──
-        # Auto-classification results, editable by user before proceeding
-        "doc_classifications": {},   # {"filename": "ALM (Asset Liability Management)", ...}
-        "file_data_types": {},       # {"filename": "Structured" | "Unstructured"}
-        # Dynamic schema: user can add/remove fields per doc type
-        "extraction_schemas": {},    # {"ALM (Asset Liability Management)": ["field1", ...], ...}
+        "uploaded_files_meta": [],
+        "doc_classifications": {},
+        "file_data_types": {},
+        "extraction_schemas": {},
         "classification_approved": False,
-
-        # ── Stage 4: Analysis Output ──
         "analysis_complete": False,
-        "extracted_data": {},        # {"filename": {"field": "value", ...}}
+        "extracted_data": {},
         "web_research": "",
-        "swot_analysis": {},         # {"strengths": [], "weaknesses": [], "opportunities": [], "threats": []}
+        "swot_analysis": {},
         "final_decision": {},
         "cam_summary": "",
         "pdf_bytes": None,
-        # ── Stage 4: Verification UI ──
-        "extraction_evidence": {},   # {"filename": [{field, value, confidence, page_number, bbox, context}]}
-        "confirmed_fields": {},      # {"filename": {"field_name": True}}  user-confirmed low-conf fields
-        "_pdf_bytes_cache": {},      # {"filename": bytes} — raw bytes stored once, reused for cache-key consistency
+        "extraction_evidence": {},
+        "confirmed_fields": {},
+        "_pdf_bytes_cache": {},
     }
     for key, val in defaults.items():
         if key not in st.session_state:
@@ -541,9 +601,9 @@ def go_to_stage(stage: int):
     st.session_state.current_stage = stage
 
 def score_color(s):
-    if s >= 7: return "#0a8a50"
-    if s >= 5: return "#c87800"
-    return "#c83030"
+    if s >= 7: return "#00d4a0"
+    if s >= 5: return "#f0c060"
+    return "#ff6060"
 
 def format_to_inr_words(number):
     if number >= 10_000_000:
@@ -557,30 +617,23 @@ def format_to_inr_words(number):
 #  SCHEMA VERIFICATION TAB  (Stage 4)
 # ─────────────────────────────────────────────
 def _confidence_badge(conf: int) -> str:
-    """Return an HTML badge string for a confidence value 0-100."""
     if conf >= 80:
         return (
-            f'<span style="background:#d4edda;color:#155724;padding:3px 10px;'
-            f'border-radius:12px;font-size:11px;font-weight:700;">✓ {conf}%</span>'
+            f'<span style="background:rgba(0,200,120,0.15);color:#60e0a8;padding:3px 10px;'
+            f'border-radius:12px;font-size:11px;font-weight:700;border:1px solid rgba(0,200,120,0.3);">✓ {conf}%</span>'
         )
     if conf >= 50:
         return (
-            f'<span style="background:#fff3cd;color:#856404;padding:3px 10px;'
-            f'border-radius:12px;font-size:11px;font-weight:700;">⚠ {conf}%</span>'
+            f'<span style="background:rgba(255,180,0,0.12);color:#f0c060;padding:3px 10px;'
+            f'border-radius:12px;font-size:11px;font-weight:700;border:1px solid rgba(255,180,0,0.3);">⚠ {conf}%</span>'
         )
     return (
-        f'<span style="background:#f8d7da;color:#721c24;padding:3px 10px;'
-        f'border-radius:12px;font-size:11px;font-weight:700;">✗ {conf}% — Review</span>'
+        f'<span style="background:rgba(255,80,80,0.12);color:#ff8080;padding:3px 10px;'
+        f'border-radius:12px;font-size:11px;font-weight:700;border:1px solid rgba(255,80,80,0.3);">✗ {conf}% — Review</span>'
     )
 
 
 def _render_pdf_page_as_image(pdf_bytes: bytes, page_number: int, dpi: int = 150) -> str:
-    """
-    Renders a single PDF page (1-based) to a base64 PNG using PyMuPDF.
-    Returns a data URI string: 'data:image/png;base64,...'
-    Caches results in st.session_state['_page_img_cache'] keyed by
-    (sha256_prefix, page_number) to avoid re-rendering the same page twice.
-    """
     import fitz
     import hashlib
     import base64 as _b64
@@ -591,13 +644,12 @@ def _render_pdf_page_as_image(pdf_bytes: bytes, page_number: int, dpi: int = 150
     if cache_key in img_cache:
         return img_cache[cache_key]
 
-    # Clamp page to valid range
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     total_pages = len(doc)
-    page_idx = max(0, min(page_number - 1, total_pages - 1))  # 0-based
+    page_idx = max(0, min(page_number - 1, total_pages - 1))
 
     page = doc[page_idx]
-    mat = fitz.Matrix(dpi / 72, dpi / 72)   # 72 DPI is PDF default
+    mat = fitz.Matrix(dpi / 72, dpi / 72)
     pix = page.get_pixmap(matrix=mat, alpha=False)
     png_bytes = pix.tobytes("png")
     doc.close()
@@ -608,11 +660,6 @@ def _render_pdf_page_as_image(pdf_bytes: bytes, page_number: int, dpi: int = 150
 
 
 def _render_schema_verification_tab():
-    """
-    Renders the Schema Verification UI inside the 🔍 tab:
-    - Left column  (55 %): PDF page image with orange bbox highlight overlay
-    - Right column (45 %): Field table with confidence badges + Confirm buttons
-    """
     import base64
 
     evidence_store = st.session_state.get("extraction_evidence", {})
@@ -627,12 +674,10 @@ def _render_schema_verification_tab():
         else:
             st.info(
                 "🔍 No verification data yet. "
-                "Go back to **Stage 4** and upload a PDF with a schema defined — "
-                "the system will extract field evidence automatically."
+                "Go back to **Stage 4** and upload a PDF with a schema defined."
             )
         return
 
-    # ── File selector ────────────────────────────────────────────────────
     filenames = list(evidence_store.keys())
     selected_file = st.selectbox(
         "📄 Select document to verify",
@@ -646,20 +691,19 @@ def _render_schema_verification_tab():
         st.warning("No evidence records found for this file.")
         return
 
-    # ── Summary counters ─────────────────────────────────────────────────
-    total       = len(evidence_list)
-    green_count = sum(1 for e in evidence_list if e["confidence"] >= 80)
-    yellow_count= sum(1 for e in evidence_list if 50 <= e["confidence"] < 80)
-    red_count   = sum(1 for e in evidence_list if e["confidence"] < 50)
+    total        = len(evidence_list)
+    green_count  = sum(1 for e in evidence_list if e["confidence"] >= 80)
+    yellow_count = sum(1 for e in evidence_list if 50 <= e["confidence"] < 80)
+    red_count    = sum(1 for e in evidence_list if e["confidence"] < 50)
     unconfirmed_red = [
         e for e in evidence_list
         if e["confidence"] < 50 and not confirmed_map.get(e["field"])
     ]
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("✅ High Confidence (≥80%)",  f"{green_count}/{total}")
-    c2.metric("⚠️ Medium Confidence (50-79%)", f"{yellow_count}/{total}")
-    c3.metric("🚨 Needs Review (<50%)", f"{red_count}/{total}")
+    c1.metric("✅ High Confidence (≥80%)",      f"{green_count}/{total}")
+    c2.metric("⚠️ Medium Confidence (50-79%)",  f"{yellow_count}/{total}")
+    c3.metric("🚨 Needs Review (<50%)",          f"{red_count}/{total}")
 
     if unconfirmed_red:
         st.error(
@@ -671,13 +715,10 @@ def _render_schema_verification_tab():
 
     st.markdown("---")
 
-    # ── Retrieve raw PDF bytes from the bytes cache ──────────────────────
     pdf_bytes_cache = st.session_state.get("_pdf_bytes_cache", {})
     raw_bytes = pdf_bytes_cache.get(selected_file)
 
-    # ── Layout: PDF viewer (left) | Fields table (right) ─────────────────
     selected_evidence: dict | None = None
-    # Default selection: first red field, else first field
     for e in evidence_list:
         if e["confidence"] < 50 and not confirmed_map.get(e["field"]):
             selected_evidence = e
@@ -685,7 +726,6 @@ def _render_schema_verification_tab():
     if not selected_evidence:
         selected_evidence = evidence_list[0]
 
-    # Allow clicking a field name to change viewer selection
     if f"selected_field_{selected_file}" not in st.session_state:
         st.session_state[f"selected_field_{selected_file}"] = selected_evidence["field"]
 
@@ -697,17 +737,15 @@ def _render_schema_verification_tab():
 
     col_pdf, col_fields = st.columns([55, 45])
 
-    # ── Left: PDF page image with bbox highlight ──────────────────────────
     with col_pdf:
         st.markdown(
-            "<div style='font-weight:700;font-size:14px;margin-bottom:8px;'>"
+            "<div style='font-weight:700;font-size:14px;margin-bottom:8px;color:#e8f4ff;'>"
             "📄 Document Preview</div>",
             unsafe_allow_html=True,
         )
         evidence_page = active_evidence.get("page_number") or 1
         bbox          = active_evidence.get("bbox") or {}
 
-        # Manual page nav state (user can scroll away from the evidence page)
         nav_key = f"viewer_page_{selected_file}"
         if st.session_state.get(f"jump_to_evidence_{selected_file}"):
             st.session_state[nav_key] = evidence_page
@@ -721,7 +759,6 @@ def _render_schema_verification_tab():
             import fitz as _fitz_nav
             total_pages = len(_fitz_nav.open(stream=raw_bytes, filetype="pdf"))
 
-            # ── Page navigation row ───────────────────────────────────────
             nav_c1, nav_c2, nav_c3, nav_c4 = st.columns([1, 1, 2, 1])
             with nav_c1:
                 if st.button("◀ Prev", key=f"prev_{selected_file}",
@@ -735,8 +772,8 @@ def _render_schema_verification_tab():
                     st.rerun()
             with nav_c3:
                 st.markdown(
-                    f'<div style="text-align:center;padding-top:6px;font-size:12px;color:#555;">'
-                    f'Page <strong>{current_page}</strong> of {total_pages}</div>',
+                    f'<div style="text-align:center;padding-top:6px;font-size:12px;color:#5a7a9a;">'
+                    f'Page <strong style="color:#c8dff5;">{current_page}</strong> of {total_pages}</div>',
                     unsafe_allow_html=True,
                 )
             with nav_c4:
@@ -745,23 +782,20 @@ def _render_schema_verification_tab():
                     st.session_state[nav_key] = evidence_page
                     st.rerun()
 
-            # ── Render page as PNG ────────────────────────────────────────
             img_data_uri = _render_pdf_page_as_image(raw_bytes, current_page, dpi=150)
 
-            # Only show bbox overlay when viewing the evidence page
             on_evidence_page = (current_page == evidence_page)
             if on_evidence_page and bbox:
                 x0 = bbox.get("x0", 0)
                 y0 = bbox.get("y0", 0)
                 x1 = bbox.get("x1", 1)
                 y1 = bbox.get("y1", 1)
-                # Pulse animation keyframe + overlay div
                 overlay_html = f"""
 <style>
 @keyframes pulse-border {{
-  0%   {{ box-shadow: 0 0 0 0 rgba(255,107,0,0.7); }}
-  70%  {{ box-shadow: 0 0 0 8px rgba(255,107,0,0); }}
-  100% {{ box-shadow: 0 0 0 0 rgba(255,107,0,0); }}
+  0%   {{ box-shadow: 0 0 0 0 rgba(0,212,255,0.7); }}
+  70%  {{ box-shadow: 0 0 0 8px rgba(0,212,255,0); }}
+  100% {{ box-shadow: 0 0 0 0 rgba(0,212,255,0); }}
 }}
 </style>
 <div style="
@@ -770,19 +804,19 @@ def _render_schema_verification_tab():
   top:{y0*100:.3f}%;
   width:{(x1-x0)*100:.3f}%;
   height:{(y1-y0)*100:.3f}%;
-  border:3px solid #ff6b00;
-  background:rgba(255,215,0,0.25);
+  border:2px solid #00d4ff;
+  background:rgba(0,212,255,0.15);
   border-radius:3px;
   pointer-events:none;
   animation: pulse-border 1.5s ease-out 3;
-  box-shadow: 0 0 10px rgba(255,107,0,0.6);
+  box-shadow: 0 0 12px rgba(0,212,255,0.5);
 "></div>"""
             else:
                 overlay_html = ""
 
             viewer_html = f"""
-<div style="position:relative;width:100%;border-radius:8px;overflow:hidden;
-            box-shadow:0 2px 14px rgba(0,0,0,0.15);background:#f0f0f0;">
+<div style="position:relative;width:100%;border-radius:10px;overflow:hidden;
+            box-shadow:0 4px 24px rgba(0,0,0,0.5);background:#0d1a38;">
   <img src="{img_data_uri}"
        style="width:100%;display:block;"
        alt="Page {current_page}"/>
@@ -790,16 +824,15 @@ def _render_schema_verification_tab():
 </div>"""
             st.markdown(viewer_html, unsafe_allow_html=True)
 
-            # ── Status line under image ───────────────────────────────────
             if on_evidence_page and bbox:
                 st.markdown(
-                    f'<div style="margin-top:5px;font-size:11px;color:#e06000;font-weight:600;">'
+                    f'<div style="margin-top:5px;font-size:11px;color:#00d4ff;font-weight:600;">'
                     f'🎯 Highlighted: <em>{active_field_name}</em> found on page {evidence_page}</div>',
                     unsafe_allow_html=True,
                 )
             elif not on_evidence_page:
                 st.markdown(
-                    f'<div style="margin-top:5px;font-size:11px;color:#888;">'
+                    f'<div style="margin-top:5px;font-size:11px;color:#5a7a9a;">'
                     f'ℹ️ AI found <em>{active_field_name}</em> on page {evidence_page} — '
                     f'click 🎯 Jump to go there</div>',
                     unsafe_allow_html=True,
@@ -807,20 +840,18 @@ def _render_schema_verification_tab():
         else:
             st.info("PDF bytes not found in session. Please re-run the analysis.")
 
-        # Context tooltip
         ctx = active_evidence.get("context", "")
         if ctx:
             st.markdown(
-                f'<div style="margin-top:10px;background:#f0f4ff;border-left:3px solid #1a5fd4;'
-                f'padding:8px 12px;border-radius:4px;font-size:12px;color:#333;">'
-                f'<strong>Source text:</strong> {ctx}</div>',
+                f'<div style="margin-top:10px;background:rgba(0,212,255,0.06);border-left:3px solid #00d4ff;'
+                f'padding:8px 12px;border-radius:4px;font-size:12px;color:#8ab8d4;">'
+                f'<strong style="color:#00d4ff;">Source text:</strong> {ctx}</div>',
                 unsafe_allow_html=True,
             )
 
-    # ── Right: Fields table ───────────────────────────────────────────────
     with col_fields:
         st.markdown(
-            "<div style='font-weight:700;font-size:14px;margin-bottom:8px;'>"
+            "<div style='font-weight:700;font-size:14px;margin-bottom:8px;color:#e8f4ff;'>"
             "🗂️ Extracted Fields</div>",
             unsafe_allow_html=True,
         )
@@ -833,18 +864,17 @@ def _render_schema_verification_tab():
             is_confirmed = confirmed_map.get(field, False)
             needs_review = conf < 50 and not is_confirmed
 
-            row_bg = "#fffbe6" if is_active else ("" if not needs_review else "#fff5f5")
-            border = "2px solid #1a5fd4" if is_active else (
-                "1px solid #ffc9c9" if needs_review else "1px solid #e8ecf0"
+            row_bg = "rgba(0,212,255,0.08)" if is_active else ("rgba(255,80,80,0.05)" if needs_review else "rgba(255,255,255,0.03)")
+            border = "1px solid #00d4ff" if is_active else (
+                "1px solid rgba(255,80,80,0.3)" if needs_review else "1px solid rgba(0,212,255,0.08)"
             )
 
             st.markdown(
-                f'<div style="background:{row_bg};border:{border};border-radius:8px;'
+                f'<div style="background:{row_bg};border:{border};border-radius:10px;'
                 f'padding:10px 14px;margin-bottom:8px;">',
                 unsafe_allow_html=True,
             )
 
-            # Field selector button + badge in same row via columns
             btn_col, badge_col = st.columns([3, 2])
             with btn_col:
                 if st.button(
@@ -854,26 +884,22 @@ def _render_schema_verification_tab():
                     use_container_width=True,
                 ):
                     st.session_state[f"selected_field_{selected_file}"] = field
-                    # Auto-jump the viewer to the evidence page for this field
                     ev_page = ev.get("page_number") or 1
                     st.session_state[f"viewer_page_{selected_file}"] = ev_page
                     st.session_state[f"jump_to_evidence_{selected_file}"] = True
                     st.rerun()
             with badge_col:
                 st.markdown(
-                    f'<div style="padding-top:6px;">'
-                    f'{_confidence_badge(conf)}</div>',
+                    f'<div style="padding-top:6px;">{_confidence_badge(conf)}</div>',
                     unsafe_allow_html=True,
                 )
 
-            # Value display
             st.markdown(
-                f'<div style="font-size:13px;font-weight:600;color:#1a1a2e;'
+                f'<div style="font-size:13px;font-weight:600;color:#c8dff5;'
                 f'margin:4px 0 2px 2px;">{value}</div>',
                 unsafe_allow_html=True,
             )
 
-            # Confirm / override for low-confidence fields
             if needs_review:
                 new_val = st.text_input(
                     "✏️ Correct value (optional)",
@@ -886,53 +912,55 @@ def _render_schema_verification_tab():
                     type="primary",
                 ):
                     if new_val.strip():
-                        # Update the evidence store with the corrected value
                         for e2 in evidence_store[selected_file]:
                             if e2["field"] == field:
                                 e2["value"]      = new_val.strip()
-                                e2["confidence"] = 100  # human confirmed
+                                e2["confidence"] = 100
                     st.session_state.confirmed_fields.setdefault(selected_file, {})[field] = True
                     st.rerun()
             elif is_confirmed:
                 st.markdown(
-                    '<span style="font-size:11px;color:#155724;">✔ Confirmed by reviewer</span>',
+                    '<span style="font-size:11px;color:#60e0a8;">✔ Confirmed by reviewer</span>',
                     unsafe_allow_html=True,
                 )
 
             st.markdown("</div>", unsafe_allow_html=True)
 
 
+# ─────────────────────────────────────────────
+#  SIDEBAR
+# ─────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
-    <div style="padding:22px 2px 22px 2px;border-bottom:1px solid #1e3558;margin-bottom:22px;">
+    <div style="padding:22px 2px 22px 2px;border-bottom:1px solid rgba(0,212,255,0.1);margin-bottom:22px;">
       <div style="display:flex;align-items:center;gap:13px;">
-        <div style="width:42px;height:42px;background:linear-gradient(135deg,#1a5fd4,#3ab0ff);
+        <div style="width:42px;height:42px;
+          background:linear-gradient(135deg,#00d4ff,#7b2fff);
           border-radius:11px;display:flex;align-items:center;justify-content:center;
           font-size:20px;font-weight:900;color:#fff;flex-shrink:0;
-          box-shadow:0 4px 12px rgba(26,95,212,0.45);">₹</div>
+          box-shadow:0 4px 16px rgba(0,212,255,0.4);">₹</div>
         <div>
-          <div style="font-size:15px;font-weight:800;color:#ffffff;letter-spacing:0.04em;">INTELLI-CREDIT</div>
-          <div style="font-size:9px;color:#7aaacf;letter-spacing:0.2em;margin-top:3px;text-transform:uppercase;">Corporate Credit Engine</div>
+          <div style="font-size:15px;font-weight:800;color:#ffffff;letter-spacing:0.04em;font-family:'Manrope',sans-serif;">INTELLI-CREDIT</div>
+          <div style="font-size:9px;color:rgba(0,212,255,0.6);letter-spacing:0.2em;margin-top:3px;text-transform:uppercase;font-family:'Manrope',sans-serif;">Corporate Credit Engine</div>
         </div>
       </div>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div style="font-size:10px;letter-spacing:0.22em;color:#5a8ab8;margin-bottom:12px;
-      text-transform:uppercase;font-weight:700;">📋 &nbsp;Workflow Stages</div>
+    <div style="font-size:10px;letter-spacing:0.22em;color:rgba(0,212,255,0.5);margin-bottom:12px;
+      text-transform:uppercase;font-weight:700;font-family:'Manrope',sans-serif;">📋 &nbsp;Workflow Stages</div>
     """, unsafe_allow_html=True)
 
     for stage_num, (icon, label) in STAGES.items():
         current = st.session_state.current_stage
         if stage_num < current:
-            num_bg = "#0b4030"; num_color = "#35e882"; text_color = "#70e0a0"
+            text_color = "rgba(0,200,120,0.9)"
         elif stage_num == current:
-            num_bg = "#1a4080"; num_color = "#5ac8ff"; text_color = "#c8e8ff"
+            text_color = "#00d4ff"
         else:
-            num_bg = "#132030"; num_color = "#5a7a9a"; text_color = "#6a8aaa"
+            text_color = "rgba(90,120,160,0.7)"
 
-        # Allow navigating back to completed stages only
         if stage_num <= current:
             if st.button(f"{'✅' if stage_num < current else '▶'} Stage {stage_num}: {icon} {label}",
                          key=f"nav_{stage_num}", use_container_width=True):
@@ -940,46 +968,46 @@ with st.sidebar:
         else:
             st.markdown(f"""
             <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;
-              border-radius:8px;margin-bottom:5px;background:#ffffff08;border:1px solid #1a2e45;">
-              <div style="width:22px;height:22px;background:{num_bg};border-radius:6px;
+              border-radius:8px;margin-bottom:5px;background:rgba(255,255,255,0.02);
+              border:1px solid rgba(0,212,255,0.06);">
+              <div style="width:22px;height:22px;background:rgba(255,255,255,0.05);border-radius:6px;
                 display:flex;align-items:center;justify-content:center;
-                font-size:10px;font-weight:800;color:{num_color};flex-shrink:0;">{stage_num}</div>
-              <span style="font-size:12.5px;color:{text_color};font-weight:500;">{icon}&nbsp;&nbsp;{label}</span>
+                font-size:10px;font-weight:800;color:rgba(90,120,160,0.6);flex-shrink:0;">{stage_num}</div>
+              <span style="font-size:12.5px;color:{text_color};font-weight:500;font-family:'Manrope',sans-serif;">{icon}&nbsp;&nbsp;{label}</span>
             </div>""", unsafe_allow_html=True)
 
-    # Show entity summary if onboarded
     if st.session_state.entity_data.get("company_name"):
         st.markdown("---")
-        st.markdown("""<div style="font-size:10px;letter-spacing:0.18em;color:#5a8ab8;
-          text-transform:uppercase;font-weight:700;margin-bottom:8px;">Active Entity</div>""",
+        st.markdown("""<div style="font-size:10px;letter-spacing:0.18em;color:rgba(0,212,255,0.5);
+          text-transform:uppercase;font-weight:700;margin-bottom:8px;font-family:'Manrope',sans-serif;">Active Entity</div>""",
           unsafe_allow_html=True)
         ed = st.session_state.entity_data
         ld = st.session_state.loan_data
         st.markdown(f"""
-        <div style="background:linear-gradient(135deg,#0e2240,#0a1a30);
-                    border:1px solid #1e3a5a;border-radius:10px;
-                    padding:12px 14px;font-size:12px;">
-          <b style="color:#e0f0ff;font-size:13px;">{ed['company_name']}</b><br/>
-          <span style="color:#7aaacf;">CIN: {ed.get('cin','—')}</span><br/>
-          <span style="color:#7aaacf;">Sector: {ed.get('sector','—')}</span><br/>
-          <span style="color:#4dcfff;font-weight:700;font-size:13px;">
+        <div style="background:linear-gradient(135deg,rgba(0,212,255,0.06),rgba(123,47,255,0.06));
+                    border:1px solid rgba(0,212,255,0.15);border-radius:12px;
+                    padding:12px 14px;font-size:12px;font-family:'Manrope',sans-serif;">
+          <b style="color:#e8f4ff;font-size:13px;">{ed['company_name']}</b><br/>
+          <span style="color:rgba(0,212,255,0.6);">CIN: {ed.get('cin','—')}</span><br/>
+          <span style="color:rgba(0,212,255,0.6);">Sector: {ed.get('sector','—')}</span><br/>
+          <span style="color:#00d4ff;font-weight:700;font-size:13px;">
             {format_to_inr_words(ld.get('requested_amount', 0))}
           </span>
         </div>
         """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div style="padding-top:24px;border-top:1px solid #1a3050;margin-top:28px;">
-      <div style="background:linear-gradient(135deg,#0e2248,#1a3a70);
-        border:1px solid #2a4a80;border-radius:10px;
+    <div style="padding-top:24px;border-top:1px solid rgba(0,212,255,0.08);margin-top:28px;">
+      <div style="background:linear-gradient(135deg,rgba(0,212,255,0.06),rgba(123,47,255,0.08));
+        border:1px solid rgba(0,212,255,0.15);border-radius:12px;
         padding:11px 14px;display:flex;align-items:center;gap:10px;">
         <div style="width:32px;height:32px;
-          background:linear-gradient(135deg,#3ab0ff,#1a5fd4);
+          background:linear-gradient(135deg,#00d4ff,#7b2fff);
           border-radius:8px;display:flex;align-items:center;justify-content:center;
-          font-size:15px;flex-shrink:0;box-shadow:0 2px 8px rgba(58,176,255,0.4);">⚡</div>
+          font-size:15px;flex-shrink:0;box-shadow:0 2px 10px rgba(0,212,255,0.4);">⚡</div>
         <div>
-          <div style="font-size:13px;font-weight:800;color:#ffffff;letter-spacing:0.06em;">TENSOR</div>
-          <div style="font-size:9px;color:#7aaacf;letter-spacing:0.12em;margin-top:1px;text-transform:uppercase;">
+          <div style="font-size:13px;font-weight:800;color:#ffffff;letter-spacing:0.06em;font-family:'Manrope',sans-serif;">TENSOR</div>
+          <div style="font-size:9px;color:rgba(0,212,255,0.6);letter-spacing:0.12em;margin-top:1px;text-transform:uppercase;font-family:'Manrope',sans-serif;">
             Built by Team Tensor
           </div>
         </div>
@@ -987,26 +1015,24 @@ with st.sidebar:
     </div>
     """, unsafe_allow_html=True)
 
-    # OCR backend badge
     _ocr_icon  = "🧠" if "Document AI" in _OCR_BACKEND else "📄"
-    _ocr_color = "#10a870" if "Document AI" in _OCR_BACKEND else "#5a8ab8"
+    _ocr_color = "#00d4a0" if "Document AI" in _OCR_BACKEND else "rgba(0,212,255,0.5)"
     st.markdown(
         f'<div style="margin-top:10px;padding:6px 10px;border-radius:7px;'
-        f'background:#0a1a2a;border:1px solid #1a3050;font-size:10px;'
-        f'color:{_ocr_color};font-weight:600;letter-spacing:0.05em;">'
+        f'background:rgba(0,0,0,0.3);border:1px solid rgba(0,212,255,0.08);font-size:10px;'
+        f'color:{_ocr_color};font-weight:600;letter-spacing:0.05em;font-family:\'DM Mono\',monospace;">'
         f'{_ocr_icon}&nbsp; OCR: {_OCR_BACKEND}</div>',
         unsafe_allow_html=True,
     )
 
 
-
 # ─────────────────────────────────────────────
-#  STEP PROGRESS BAR (top of main area)
+#  STEP PROGRESS BAR
 # ─────────────────────────────────────────────
 def render_progress_bar():
     current = st.session_state.current_stage
     cols = st.columns([1, 0.3, 1, 0.3, 1, 0.3, 1])
-    stage_cols  = [cols[0], cols[2], cols[4], cols[6]]
+    stage_cols     = [cols[0], cols[2], cols[4], cols[6]]
     connector_cols = [cols[1], cols[3], cols[5]]
 
     for i, (stage_num, (icon, label)) in enumerate(STAGES.items()):
@@ -1014,15 +1040,15 @@ def render_progress_bar():
             if stage_num < current:
                 badge_class = "step-indicator-done"
                 badge_content = "✓"
-                color = "#0b8a5a"
+                color = "#00d4a0"
             elif stage_num == current:
                 badge_class = "step-indicator-active"
                 badge_content = str(stage_num)
-                color = "#1a5fd4"
+                color = "#00d4ff"
             else:
                 badge_class = "step-indicator-pending"
                 badge_content = str(stage_num)
-                color = "#9ab0c8"
+                color = "rgba(90,120,160,0.6)"
             st.markdown(
                 f'<div style="text-align:center;">'
                 f'<div class="{badge_class}" style="margin:0 auto 6px auto;">{badge_content}</div>'
@@ -1041,23 +1067,12 @@ def render_progress_bar():
                 unsafe_allow_html=True
             )
 
+
 # ─────────────────────────────────────────────
 #  PDF EXPORT HELPER
 # ─────────────────────────────────────────────
-def _build_pdf(
-    cam_summary: str,
-    entity_data: dict,
-    loan_data: dict,
-    decision: dict,
-) -> bytes:
-    """
-    Builds a structured Credit Appraisal Memorandum (CAM) PDF.
-    Parses the LLM-generated cam_summary into discrete sections
-    and renders each with proper typesetting — no text overlaps.
-    """
-
-    # ── Helpers ──────────────────────────────────────────────────────────
-    def _clean(text: str) -> str:
+def _build_pdf(cam_summary, entity_data, loan_data, decision):
+    def _clean(text):
         text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
         text = re.sub(r"\*(.+?)\*",     r"\1", text)
         text = re.sub(r"^#{1,6}\s+",    "",    text, flags=re.MULTILINE)
@@ -1070,65 +1085,42 @@ def _build_pdf(
         text = text.encode("latin-1", errors="ignore").decode("latin-1")
         return text
 
-    def _parse_table(lines: list[str]) -> list[list[str]]:
-        """Extract markdown table rows into list-of-lists."""
+    def _parse_table(lines):
         rows = []
         for ln in lines:
             ln = ln.strip()
-            if not ln.startswith("|"):
-                continue
-            if re.match(r"^\|[-| :]+\|$", ln):
-                continue
+            if not ln.startswith("|"): continue
+            if re.match(r"^\|[-| :]+\|$", ln): continue
             cells = [c.strip() for c in ln.strip("|").split("|")]
             rows.append([_clean(c) for c in cells])
         return rows
 
-    def _draw_table(pdf: FPDF, rows: list[list[str]], col_widths: list[float], line_h: float = 5.5):
-        """Draw a table where every cell in a row shares the same height.
-
-        Strategy:
-        1. For each data row, estimate how many lines each cell needs
-           (text length ÷ chars-per-line based on col width).
-        2. Take the max line-count across all cells → that is the row height.
-        3. Draw every cell as a filled rect + clipped text using that height.
-        """
-        if not rows:
-            return
-
-        CHAR_W = 1.9   # approx mm per character at 8pt Helvetica
-
-        def _lines_needed(text: str, col_w: float) -> int:
+    def _draw_table(pdf, rows, col_widths, line_h=5.5):
+        if not rows: return
+        CHAR_W = 1.9
+        def _lines_needed(text, col_w):
             chars_per_line = max(1, int(col_w / CHAR_W))
             words = text.split()
             line, lines = 0, 1
             for w in words:
-                if line + len(w) + 1 <= chars_per_line:
-                    line += len(w) + 1
-                else:
-                    lines += 1
-                    line = len(w)
+                if line + len(w) + 1 <= chars_per_line: line += len(w) + 1
+                else: lines += 1; line = len(w)
             return lines
 
-        total_w = sum(col_widths)
-
-        # ── Header row ──
         pdf.set_font("Helvetica", "B", 8)
-        pdf.set_fill_color(26, 58, 112)
-        pdf.set_text_color(255, 255, 255)
+        pdf.set_fill_color(4, 10, 22)
+        pdf.set_text_color(0, 212, 255)
         hdr_h = line_h + 2
-        row_x = pdf.get_x()
-        row_y = pdf.get_y()
         for cell, w in zip(rows[0], col_widths):
-            # Measure header lines
             n = _lines_needed(cell[:60], w)
             this_h = n * (line_h + 1) + 3
             hdr_h = max(hdr_h, this_h)
-
+        row_y = pdf.get_y()
         for cell, w in zip(rows[0], col_widths):
             x0, y0 = pdf.get_x(), pdf.get_y()
-            pdf.set_fill_color(26, 58, 112)
+            pdf.set_fill_color(4, 10, 22)
             pdf.rect(x0, y0, w, hdr_h, "F")
-            pdf.set_draw_color(200, 215, 240)
+            pdf.set_draw_color(0, 80, 100)
             pdf.rect(x0, y0, w, hdr_h, "D")
             pdf.set_xy(x0 + 2, y0 + 2)
             pdf.multi_cell(w - 4, line_h, cell[:60], border=0, fill=False)
@@ -1136,69 +1128,55 @@ def _build_pdf(
         pdf.set_draw_color(0, 0, 0)
         pdf.ln(hdr_h)
 
-        # ── Data rows ──
         pdf.set_font("Helvetica", "", 8)
         for i, row in enumerate(rows[1:], 1):
-            # 1. compute this row's height
             max_lines = 1
             for cell, w in zip(row, col_widths):
                 n = _lines_needed(_clean(cell[:250]), w)
                 max_lines = max(max_lines, n)
-            row_h = max_lines * line_h + 4   # padding top+bottom
-
-            # check page break manually
-            if pdf.get_y() + row_h > pdf.h - pdf.b_margin - 5:
-                pdf.add_page()
-
-            # 2. draw all cells at this height
-            bg = (240, 246, 255) if i % 2 == 0 else (255, 255, 255)
+            row_h = max_lines * line_h + 4
+            if pdf.get_y() + row_h > pdf.h - pdf.b_margin - 5: pdf.add_page()
+            bg = (12, 24, 48) if i % 2 == 0 else (8, 16, 36)
             row_y = pdf.get_y()
             for cell, w in zip(row, col_widths):
                 x0 = pdf.get_x()
-                # fill background
                 pdf.set_fill_color(*bg)
                 pdf.rect(x0, row_y, w, row_h, "F")
-                # border
-                pdf.set_draw_color(190, 210, 235)
+                pdf.set_draw_color(20, 50, 80)
                 pdf.rect(x0, row_y, w, row_h, "D")
-                # text — vertically centred
                 pdf.set_xy(x0 + 2, row_y + 2)
-                pdf.set_text_color(20, 35, 70)
+                pdf.set_text_color(200, 223, 245)
                 pdf.multi_cell(w - 4, line_h, _clean(cell[:250]), border=0, fill=False)
                 pdf.set_xy(x0 + w, row_y)
-
             pdf.set_draw_color(0, 0, 0)
-            pdf.set_xy(18, row_y + row_h)   # move cursor below this row
-
+            pdf.set_xy(18, row_y + row_h)
         pdf.ln(3)
 
-    def _section_banner(pdf: FPDF, title: str):
+    def _section_banner(pdf, title):
         pdf.set_font("Helvetica", "B", 9)
-        pdf.set_fill_color(26, 58, 112)
-        pdf.set_text_color(255, 255, 255)
+        pdf.set_fill_color(4, 10, 22)
+        pdf.set_text_color(0, 212, 255)
         pdf.cell(174, 7, f"  {title}", fill=True, ln=True)
-        pdf.set_text_color(20, 35, 70)
+        pdf.set_text_color(200, 223, 245)
         pdf.set_font("Helvetica", "", 9)
         pdf.ln(2)
 
-    def _bullet(pdf: FPDF, text: str):
+    def _bullet(pdf, text):
         pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(20, 35, 70)
+        pdf.set_text_color(200, 223, 245)
         clean = _clean(text.lstrip("-•* "))
-        if not clean.strip():
-            return
+        if not clean.strip(): return
         pdf.cell(6)
         pdf.multi_cell(168, 5, "-  " + clean[:300])
         pdf.ln(1)
 
-    def _body_text(pdf: FPDF, text: str):
+    def _body_text(pdf, text):
         pdf.set_font("Helvetica", "", 9)
-        pdf.set_text_color(20, 35, 70)
+        pdf.set_text_color(200, 223, 245)
         pdf.multi_cell(174, 5, _clean(text)[:600])
         pdf.ln(1)
 
-    # ── Parse cam_summary into sections ──────────────────────────────────
-    section_map: dict[str, list[str]] = {}
+    section_map = {}
     current_key = "PREAMBLE"
     section_map[current_key] = []
     for line in cam_summary.split("\n"):
@@ -1210,33 +1188,26 @@ def _build_pdf(
         else:
             section_map.setdefault(current_key, []).append(line)
 
-    def _get_section(*keys) -> list[str]:
+    def _get_section(*keys):
         for k in keys:
             for sk in section_map:
-                if k.upper() in sk:
-                    return section_map[sk]
+                if k.upper() in sk: return section_map[sk]
         return []
 
-    s_score  = decision.get("credit_score", 0)
-    verdict  = "APPROVE" if s_score >= 7 else "CAUTION" if s_score >= 5 else "REJECT"
+    s_score   = decision.get("credit_score", 0)
+    verdict   = "APPROVE" if s_score >= 7 else "CAUTION" if s_score >= 5 else "REJECT"
     rec_limit = format_to_inr_words(decision.get("recommended_limit_inr", 0)).replace("₹","Rs.")
     rec_rate  = decision.get("recommended_interest_rate", 0)
-    vc_map = {"APPROVE": (10,138,80), "CAUTION":(180,110,0), "REJECT":(180,30,30)}
-    vc = vc_map.get(verdict, (80,80,80))
+    vc_map    = {"APPROVE": (0,184,122), "CAUTION":(240,192,0), "REJECT":(255,80,80)}
+    vc        = vc_map.get(verdict, (80,80,80))
 
     pdf = FPDF()
     pdf.set_auto_page_break(auto=True, margin=18)
     pdf.set_margins(18, 18, 18)
-
-    # ════════════════════════════════════════════════
-    #  PAGE 1 — COVER
-    # ════════════════════════════════════════════════
     pdf.add_page()
 
-    # ── Top banner ──
-    pdf.set_fill_color(13, 31, 60)
+    pdf.set_fill_color(4, 10, 22)
     pdf.rect(0, 0, 210, 32, "F")
-    # Accent line
     pdf.set_fill_color(*vc)
     pdf.rect(0, 32, 210, 2, "F")
     pdf.set_xy(0, 7)
@@ -1245,10 +1216,9 @@ def _build_pdf(
     pdf.cell(210, 10, "CREDIT APPRAISAL MEMORANDUM", align="C")
     pdf.set_xy(0, 18)
     pdf.set_font("Helvetica", "B", 8)
-    pdf.set_text_color(160, 190, 220)
+    pdf.set_text_color(0, 180, 220)
     pdf.cell(210, 7, f"TENSOR AI  |  INTELLI-CREDIT ENGINE  |  Generated: {datetime.now().strftime('%d %B %Y, %H:%M')}  |  CONFIDENTIAL", align="C")
 
-    # ── Verdict ribbon ──
     pdf.set_xy(18, 40)
     pdf.set_fill_color(*vc)
     pdf.set_text_color(255, 255, 255)
@@ -1258,16 +1228,14 @@ def _build_pdf(
         fill=True, ln=True)
 
     pdf.ln(6)
-    pdf.set_text_color(13, 31, 60)
-
-    # ── Entity name heading ──
+    pdf.set_text_color(200, 223, 245)
     pdf.set_font("Helvetica", "B", 11)
     pdf.cell(174, 7, f"BORROWING ENTITY: {_clean(entity_data.get('company_name','').upper())}", ln=True)
     pdf.ln(3)
 
-    # ── Entity / Loan 2-col table ──
     pdf.set_font("Helvetica", "B", 9)
-    pdf.set_fill_color(210, 225, 252)
+    pdf.set_fill_color(0, 60, 90)
+    pdf.set_text_color(0, 212, 255)
     pdf.cell(87, 7, "ENTITY DETAILS", border=1, fill=True, align="C")
     pdf.cell(4)
     pdf.cell(83, 7, "FACILITY DETAILS", border=1, fill=True, align="C")
@@ -1292,21 +1260,23 @@ def _build_pdf(
     pdf.set_font("Helvetica", "", 9)
     for (el, ev), (ll, lv) in zip(e_rows, l_rows):
         pdf.set_font("Helvetica", "B", 8.5)
+        pdf.set_text_color(0, 180, 220)
         pdf.cell(28, 6, el, border="LTB")
         pdf.set_font("Helvetica", "", 8.5)
+        pdf.set_text_color(200, 223, 245)
         pdf.cell(59, 6, ev[:42], border="RTB")
         pdf.cell(4)
         pdf.set_font("Helvetica", "B", 8.5)
+        pdf.set_text_color(0, 180, 220)
         pdf.cell(26, 6, ll, border="LTB")
         pdf.set_font("Helvetica", "", 8.5)
+        pdf.set_text_color(200, 223, 245)
         pdf.cell(57, 6, lv[:40], border="RTB")
         pdf.ln(6)
 
     pdf.ln(5)
-
-    # ── Score card ──
     box_y = pdf.get_y()
-    pdf.set_fill_color(240, 246, 255)
+    pdf.set_fill_color(8, 16, 36)
     pdf.set_draw_color(*vc)
     pdf.set_line_width(1.0)
     pdf.rect(18, box_y, 174, 24, "DF")
@@ -1320,96 +1290,68 @@ def _build_pdf(
     pdf.cell(80, 6, f"SYSTEM VERDICT: {verdict}")
     pdf.set_xy(65, box_y + 13)
     pdf.set_font("Helvetica", "", 8.5)
-    pdf.set_text_color(40, 60, 100)
+    pdf.set_text_color(0, 180, 220)
     pdf.cell(80, 5, f"Approved Limit: {rec_limit}   |   Rate: {rec_rate}% p.a.")
 
-    # ════════════════════════════════════════════════
-    #  PAGE 2 — EXECUTIVE SUMMARY + FINANCIAL TABLE
-    # ════════════════════════════════════════════════
     pdf.add_page()
-    pdf.set_text_color(20, 35, 70)
+    pdf.set_text_color(200, 223, 245)
 
-    # 1. Executive Summary
     _section_banner(pdf, "1. EXECUTIVE SUMMARY")
-    exec_lines = _get_section("EXECUTIVE SUMMARY")
-    for ln in exec_lines:
+    for ln in _get_section("EXECUTIVE SUMMARY"):
         t = ln.strip()
-        if t and not t.startswith("|") and not t.startswith("#"):
-            _body_text(pdf, t)
+        if t and not t.startswith("|") and not t.startswith("#"): _body_text(pdf, t)
     pdf.ln(3)
 
-    # 2. Financial Summary
     _section_banner(pdf, "2. FINANCIAL SUMMARY (VERIFIED SCHEMA)")
     fin_lines = _get_section("FINANCIAL SUMMARY")
     fin_rows  = _parse_table(fin_lines)
     if fin_rows:
-        n_cols = len(fin_rows[0])
-        w = 174 / max(n_cols, 1)
+        n_cols = len(fin_rows[0]); w = 174 / max(n_cols, 1)
         _draw_table(pdf, fin_rows, [w] * n_cols)
     else:
         for ln in fin_lines:
             t = ln.strip()
-            if t and not t.startswith("|"):
-                _body_text(pdf, t)
+            if t and not t.startswith("|"): _body_text(pdf, t)
     pdf.ln(3)
 
-    # 3. Five Cs
     _section_banner(pdf, "3. THE FIVE Cs OF CREDIT ASSESSMENT")
-    fivec_lines = _get_section("FIVE Cs", "FIVE C", "5 C")
-    fivec_rows  = _parse_table(fivec_lines)
-    if fivec_rows:
-        _draw_table(pdf, fivec_rows, [32, 116, 26])
+    fivec_rows = _parse_table(_get_section("FIVE Cs", "FIVE C", "5 C"))
+    if fivec_rows: _draw_table(pdf, fivec_rows, [32, 116, 26])
     pdf.ln(3)
 
-    # ════════════════════════════════════════════════
-    #  PAGE 3 — SWOT + WEB INTELLIGENCE + RISK FLAGS
-    # ════════════════════════════════════════════════
     pdf.add_page()
-    pdf.set_text_color(20, 35, 70)
+    pdf.set_text_color(200, 223, 245)
 
-    # 4. SWOT
     _section_banner(pdf, "4. SWOT ANALYSIS")
-    swot_lines = _get_section("SWOT")
-    swot_rows  = _parse_table(swot_lines)
-    if swot_rows:
-        _draw_table(pdf, swot_rows, [38, 136])
+    swot_rows = _parse_table(_get_section("SWOT"))
+    if swot_rows: _draw_table(pdf, swot_rows, [38, 136])
     pdf.ln(3)
 
-    # 5. Web Intelligence
     _section_banner(pdf, "5. EXTERNAL RISK INTELLIGENCE & WARNING SIGNALS")
-    web_lines = _get_section("WEB INTELLIGENCE", "EXTERNAL RISK", "RISK FLAGS", "WARNING")
-    for ln in web_lines:
+    for ln in _get_section("WEB INTELLIGENCE", "EXTERNAL RISK", "RISK FLAGS", "WARNING"):
         t = ln.strip()
-        if not t or t.startswith("|") or t.startswith("#"):
-            continue
-        if t.startswith(("-", "•", "*")):
-            _bullet(pdf, t)
-        else:
-            _body_text(pdf, t)
+        if not t or t.startswith("|") or t.startswith("#"): continue
+        if t.startswith(("-","•","*")): _bullet(pdf, t)
+        else: _body_text(pdf, t)
     pdf.ln(3)
 
-    # 6. Recommended Terms
     _section_banner(pdf, "6. RECOMMENDED TERMS & CONDITIONS")
     terms_lines = _get_section("RECOMMENDED TERMS", "RECOMMENDED")
     terms_rows  = _parse_table(terms_lines)
-    if terms_rows:
-        _draw_table(pdf, terms_rows, [60, 114])
+    if terms_rows: _draw_table(pdf, terms_rows, [60, 114])
     else:
         for ln in terms_lines:
             t = ln.strip()
-            if t and not t.startswith("|"):
-                _body_text(pdf, t)
+            if t and not t.startswith("|"): _body_text(pdf, t)
     pdf.ln(3)
 
-    # 7. Catch-all: any remaining sections from LLM
     for sk, sl in section_map.items():
         already = {"PREAMBLE","EXECUTIVE SUMMARY","FINANCIAL SUMMARY","FIVE CS OF CREDIT",
                    "FIVE CS","FIVE C","SWOT ANALYSIS","SWOT","WEB INTELLIGENCE TRIANGULATION",
                    "WEB INTELLIGENCE","EXTERNAL RISK INTELLIGENCE & WARNING SIGNALS",
                    "RISK FLAGS & EARLY WARNING SIGNALS","EXTERNAL RISK","RISK FLAGS",
                    "WARNING","RECOMMENDED TERMS & CONDITIONS","RECOMMENDED TERMS","RECOMMENDED"}
-        if sk in already or not sl:
-            continue
+        if sk in already or not sl: continue
         _section_banner(pdf, sk)
         tbl = _parse_table(sl)
         if tbl:
@@ -1418,37 +1360,14 @@ def _build_pdf(
         else:
             for ln in sl:
                 t = ln.strip()
-                if not t or t.startswith("#"):
-                    continue
-                if t.startswith(("-","•","*")):
-                    _bullet(pdf, t)
-                else:
-                    _body_text(pdf, t)
+                if not t or t.startswith("#"): continue
+                if t.startswith(("-","•","*")): _bullet(pdf, t)
+                else: _body_text(pdf, t)
         pdf.ln(3)
 
-    # ── Footer on every page ──────────────────────────────────────────────
-    class _PDF(FPDF):
-        def footer(self):
-            self.set_y(-14)
-            self.set_font("Helvetica","I", 7)
-            self.set_text_color(130,150,180)
-            self.cell(0, 5,
-                f"Generated on {datetime.now().strftime('%d %b %Y %H:%M')}  |  Page {self.page_no()}",
-                align="C")
-
-    # Re-build with footer-enabled subclass
-    pdf2 = _PDF()
-    pdf2.set_auto_page_break(auto=True, margin=18)
-    pdf2.set_margins(18, 18, 18)
-    # Transfer pages by re-running (simplest FPDF2 approach: copy output bytes back)
-    # We already have `pdf` fully built — add footer via alias
-    for page_num in range(1, pdf.page + 1):
-        pass  # footer is on the re-built copy — just use existing pdf
-
-    # Write footer manually on last page
     pdf.set_y(-14)
     pdf.set_font("Helvetica", "I", 7)
-    pdf.set_text_color(130, 150, 180)
+    pdf.set_text_color(0, 130, 160)
     pdf.cell(0, 5,
         f"Generated on {datetime.now().strftime('%d %b %Y %H:%M')}  |  Page {pdf.page}",
         align="C")
@@ -1456,39 +1375,270 @@ def _build_pdf(
     return bytes(pdf.output())
 
 
+# ─────────────────────────────────────────────
+#  HERO SECTION — SPLINE INTEGRATED
+# ─────────────────────────────────────────────
+_HERO_TEMPLATE = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:transparent; font-family:'Manrope',sans-serif; }
 
-# ── HERO HEADER ──
-st.markdown("""
-<div style="background:linear-gradient(135deg,#0c1c38 0%,#103878 52%,#1a5fd4 100%);
-  border-radius:14px;padding:26px 34px;margin-bottom:28px;
-  display:flex;align-items:center;justify-content:space-between;
-  box-shadow:0 6px 28px rgba(12,28,56,0.20);position:relative;overflow:hidden;">
-  <div style="position:absolute;top:-40px;right:-40px;width:200px;height:200px;
-    background:rgba(255,255,255,0.04);border-radius:50%;"></div>
-  <div style="position:absolute;bottom:-60px;right:80px;width:140px;height:140px;
-    background:rgba(255,255,255,0.03);border-radius:50%;"></div>
-  <div>
-    <div style="font-size:11px;letter-spacing:0.28em;color:#7eb3f5;font-weight:600;
-      text-transform:uppercase;margin-bottom:6px;">Tensor AI — Credit Intelligence Platform</div>
-    <div style="font-size:28px;font-weight:800;color:#ffffff;letter-spacing:0.01em;
-      line-height:1.15;">INTELLI-CREDIT ENGINE</div>
-    <div style="font-size:13px;color:#a8c8f0;margin-top:6px;font-weight:400;">
-      AI-driven underwriting · Multi-source intelligence · Automated CAM generation
-    </div>
+  #hero {
+    position:relative; width:100%; height:100%;
+    background:radial-gradient(ellipse at 72% 50%,rgba(123,47,255,0.18) 0%,rgba(0,212,255,0.08) 38%,#040a16 68%);
+    overflow:hidden;
+  }
+  #hero::before {
+    content:''; position:absolute; inset:0; z-index:1; pointer-events:none;
+    background-image:radial-gradient(circle,rgba(0,212,255,0.05) 1px,transparent 1px);
+    background-size:34px 34px;
+  }
+
+  #spline-canvas { position:absolute; top:0; left:0; display:block; z-index:2; }
+
+  /* Text overlay — pointer-events:none so all mouse reaches canvas/document */
+  .hero-overlay {
+    position:absolute; top:0; left:0; width:55%; height:100%;
+    z-index:20; pointer-events:none; user-select:none;
+    display:flex; flex-direction:column; justify-content:center; padding:0 0 0 44px;
+    background:linear-gradient(to right,rgba(4,10,22,0.97) 0%,rgba(4,10,22,0.82) 55%,transparent 100%);
+  }
+  .eyebrow { display:inline-flex; align-items:center; gap:8px; font-size:9.5px; letter-spacing:0.28em; text-transform:uppercase; color:rgba(0,212,255,0.65); font-weight:700; margin-bottom:14px; }
+  .eyebrow-dot { width:6px; height:6px; border-radius:50%; background:#00d4ff; box-shadow:0 0 8px #00d4ff; animation:pulse 2s ease-in-out infinite; }
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.5);opacity:0.6;}}
+  .hero-title { font-size:46px; font-weight:900; line-height:1.02; letter-spacing:-0.02em; color:#fff; margin-bottom:12px; }
+  .hero-title .grad { background:linear-gradient(135deg,#00d4ff 0%,#7b2fff 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .hero-sub { font-size:13.5px; color:rgba(140,185,220,0.8); line-height:1.65; margin-bottom:22px; }
+  .badges { display:flex; gap:8px; flex-wrap:wrap; }
+  .badge { padding:5px 14px; border:1px solid rgba(0,212,255,0.25); border-radius:100px; font-size:11px; color:rgba(0,212,255,0.85); font-weight:600; background:rgba(0,212,255,0.06); }
+  .brand { position:absolute; bottom:26px; right:34px; z-index:20; text-align:right; pointer-events:none; user-select:none; }
+  .brand-sub { font-size:9px; color:rgba(0,212,255,0.4); letter-spacing:0.22em; text-transform:uppercase; font-weight:700; }
+  .brand-name { font-size:22px; font-weight:900; letter-spacing:0.06em; background:linear-gradient(135deg,#fff,#00d4ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+  .brand-ver { font-size:9px; color:rgba(123,47,255,0.55); letter-spacing:0.14em; font-weight:600; margin-top:2px; }
+  .loader { position:absolute; top:50%; right:26%; transform:translate(50%,-50%); z-index:15; display:flex; flex-direction:column; align-items:center; gap:8px; transition:opacity 0.5s; }
+  .loader-ring { width:48px; height:48px; border:2px solid rgba(0,212,255,0.1); border-top:2px solid #00d4ff; border-radius:50%; animation:spin 1s linear infinite; }
+  .loader-txt { font-size:9px; color:rgba(0,212,255,0.45); letter-spacing:0.16em; text-transform:uppercase; }
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="hero">
+  <canvas id="spline-canvas"></canvas>
+  <div class="loader" id="loader"><div class="loader-ring"></div><div class="loader-txt">Loading</div></div>
+  <div class="hero-overlay">
+    <div class="eyebrow"><div class="eyebrow-dot"></div>Tensor AI — Credit Intelligence Platform</div>
+    <div class="hero-title">INTELLI&#8209;CREDIT<br><span class="grad">ENGINE</span></div>
+    <div class="hero-sub">AI-driven underwriting &nbsp;·&nbsp; Multi-source intelligence<br>Automated CAM generation &nbsp;·&nbsp; Schema-verified extraction</div>
+    <div class="badges"><span class="badge">🤖 AI-Powered</span><span class="badge">📊 Real-Time Analysis</span><span class="badge">🔐 Enterprise Grade</span><span class="badge">v2.0</span></div>
   </div>
-  <div style="text-align:right;">
-    <div style="font-size:11px;color:#7eb3f5;letter-spacing:0.15em;font-weight:600;
-      text-transform:uppercase;">Powered by</div>
-    <div style="font-size:22px;font-weight:800;color:#ffffff;letter-spacing:0.05em;">
-      TENSOR<span style="color:#4fa3f5;">AI</span>
+  <div class="brand"><div class="brand-sub">Powered by</div><div class="brand-name">TENSORAI</div><div class="brand-ver">Enterprise Edition</div></div>
+</div>
+
+<script type="module">
+  const canvas = document.getElementById('spline-canvas');
+  const loader = document.getElementById('loader');
+
+  function sizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const W = window.innerWidth, H = window.innerHeight;
+    canvas.width  = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    return { W, H };
+  }
+  sizeCanvas();
+
+  // Decode the embedded scene once
+  const b64 = 'SPLINE_B64_PLACEHOLDER';
+  let sceneUrl = null;
+  if (b64 && b64.length > 100) {
+    try {
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      sceneUrl = URL.createObjectURL(new Blob([bytes]));
+    } catch(e) { console.error('[Spline] b64 decode failed:', e); }
+  }
+
+  // Try CDN candidates in order — first one that loads wins
+  const CDNS = [
+    'https://unpkg.com/@splinetool/runtime@latest/build/runtime.module.js',
+    'https://unpkg.com/@splinetool/runtime@1.9.28/build/runtime.module.js',
+    'https://cdn.jsdelivr.net/npm/@splinetool/runtime@latest/build/runtime.module.js',
+    'https://esm.run/@splinetool/runtime',
+  ];
+
+  async function tryLoad() {
+    if (!sceneUrl) throw new Error('no scene data');
+
+    for (const cdn of CDNS) {
+      try {
+        console.log('[Spline] trying', cdn);
+        const mod = await import(cdn);
+        const Application = mod.Application || mod.default?.Application;
+        if (!Application) throw new Error('no Application export');
+
+        const app = new Application(canvas);
+        await app.load(sceneUrl);
+
+        window.addEventListener('resize', () => {
+          const { W, H } = sizeCanvas();
+          if (app.setSize) app.setSize(W, H);
+        });
+
+        loader.style.opacity = '0';
+        setTimeout(() => loader.style.display = 'none', 600);
+        console.log('[Spline] loaded via', cdn);
+        return; // success
+      } catch(e) {
+        console.warn('[Spline] CDN failed:', cdn, e.message);
+      }
+    }
+    throw new Error('all CDNs failed');
+  }
+
+  tryLoad().catch(err => {
+    console.error('[Spline] final error:', err);
+    loader.style.display = 'none';
+    // CSS fallback orb
+    const fb = document.createElement('div');
+    fb.style.cssText = 'position:absolute;top:50%;right:10%;transform:translateY(-50%);width:340px;height:340px;border-radius:50%;background:radial-gradient(circle at 38% 38%,rgba(180,120,255,0.55) 0%,rgba(0,212,255,0.38) 35%,rgba(123,47,255,0.2) 60%,transparent 75%);box-shadow:0 0 100px rgba(0,212,255,0.25),0 0 200px rgba(123,47,255,0.15);animation:orb 4s ease-in-out infinite;z-index:3;';
+    document.head.insertAdjacentHTML('beforeend','<style>@keyframes orb{0%,100%{transform:translateY(-50%) scale(1);}50%{transform:translateY(-50%) scale(1.07);}}</style>');
+    document.getElementById('hero').appendChild(fb);
+  });
+</script>
+</body>
+</html>"""
+
+_hero_html = _HERO_TEMPLATE.replace("SPLINE_B64_PLACEHOLDER", _SPLINE_B64)
+
+_RESULTS_SPLINE_TEMPLATE = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+  html, body { width:100%; height:100%; overflow:hidden; background:transparent; font-family:'Manrope',sans-serif; }
+  #hero { position:relative; width:100%; height:100%; background:radial-gradient(ellipse at 72% 50%,rgba(VERDICT_R,VERDICT_G,VERDICT_B,0.14) 0%,rgba(0,212,255,0.05) 36%,#040a16 66%); border:1px solid rgba(VERDICT_R,VERDICT_G,VERDICT_B,0.18); border-radius:16px; overflow:hidden; }
+  #hero::before { content:''; position:absolute; inset:0; z-index:1; pointer-events:none; background-image:radial-gradient(circle,rgba(0,212,255,0.04) 1px,transparent 1px); background-size:32px 32px; border-radius:16px; }
+  #spline-canvas { position:absolute; top:0; left:0; display:block; z-index:2; }
+  .left-panel { position:absolute; top:0; left:0; width:56%; height:100%; z-index:20; pointer-events:none; user-select:none; display:flex; flex-direction:column; justify-content:center; padding:0 0 0 36px; background:linear-gradient(to right,rgba(4,10,22,0.97) 0%,rgba(4,10,22,0.85) 50%,transparent 100%); }
+  .eyebrow { display:flex; align-items:center; gap:8px; font-size:9px; letter-spacing:0.26em; text-transform:uppercase; color:rgba(0,212,255,0.55); font-weight:700; margin-bottom:16px; }
+  .eyebrow-dot { width:6px; height:6px; border-radius:50%; background:VERDICT_COLOR; box-shadow:0 0 8px VERDICT_GLOW; animation:pdot 2s ease-in-out infinite; }
+  @keyframes pdot{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.5);opacity:0.6;}}
+  .cards { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:420px; }
+  .card { background:rgba(255,255,255,0.05); border:1px solid rgba(0,212,255,0.1); border-radius:12px; padding:14px 16px; backdrop-filter:blur(10px); }
+  .card.v { background:rgba(VERDICT_R,VERDICT_G,VERDICT_B,0.07); border-color:rgba(VERDICT_R,VERDICT_G,VERDICT_B,0.28); }
+  .lbl { font-size:8.5px; letter-spacing:0.18em; text-transform:uppercase; color:rgba(0,212,255,0.4); font-weight:700; margin-bottom:7px; }
+  .score-val { font-size:46px; font-weight:900; line-height:1; color:SCORE_COLOR; }
+  .score-val sup { font-size:16px; color:rgba(255,255,255,0.22); font-weight:600; }
+  .score-bar { height:3px; background:rgba(255,255,255,0.07); border-radius:3px; margin-top:9px; overflow:hidden; }
+  .score-bar-fill { height:100%; width:SCORE_PCT%; background:linear-gradient(90deg,SCORE_COLOR,rgba(0,212,255,0.75)); border-radius:3px; }
+  .limit-val { font-size:19px; font-weight:800; color:#e8f4ff; line-height:1.15; }
+  .limit-sub { font-size:9px; color:rgba(0,212,255,0.4); margin-top:3px; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; }
+  .rate-val { font-size:40px; font-weight:900; color:#9b6fff; line-height:1; }
+  .rate-val sup { font-size:15px; color:rgba(155,111,255,0.45); }
+  .verdict-val { font-size:24px; font-weight:900; color:VERDICT_COLOR; line-height:1; letter-spacing:0.04em; }
+  .verdict-dot { width:8px; height:8px; border-radius:50%; background:VERDICT_COLOR; box-shadow:0 0 10px VERDICT_GLOW; display:inline-block; margin-right:6px; animation:pdot 2s ease-in-out infinite; }
+  .verdict-icon { font-size:19px; margin-top:4px; }
+  .loader { position:absolute; top:50%; right:26%; transform:translate(50%,-50%); z-index:15; display:flex; align-items:center; justify-content:center; transition:opacity 0.5s; }
+  .loader-ring { width:42px; height:42px; border:2px solid rgba(0,212,255,0.1); border-top:2px solid VERDICT_COLOR; border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="hero">
+  <canvas id="spline-canvas"></canvas>
+  <div class="loader" id="loader"><div class="loader-ring"></div></div>
+  <div class="left-panel">
+    <div class="eyebrow"><div class="eyebrow-dot"></div>AI Credit Decision &nbsp;·&nbsp; ENTITY_VAL</div>
+    <div class="cards">
+      <div class="card"><div class="lbl">Credit Score</div><div class="score-val">SCORE_VAL<sup>/10</sup></div><div class="score-bar"><div class="score-bar-fill"></div></div></div>
+      <div class="card v"><div class="lbl">System Verdict</div><div class="verdict-val"><span class="verdict-dot"></span>VERDICT_WORD</div><div class="verdict-icon">VERDICT_ICON</div></div>
+      <div class="card"><div class="lbl">Approved Limit</div><div class="limit-val">LIMIT_VAL</div><div class="limit-sub">Recommended Facility</div></div>
+      <div class="card"><div class="lbl">Interest Rate</div><div class="rate-val">RATE_VAL<sup>%</sup></div></div>
     </div>
-    <div style="font-size:10px;color:#7eb3f5;margin-top:2px;">v2.0 · Enterprise Edition</div>
   </div>
 </div>
-""", unsafe_allow_html=True)
 
+<script type="module">
+  const canvas = document.getElementById('spline-canvas');
+  const loader = document.getElementById('loader');
+
+  function sizeCanvas() {
+    const dpr = window.devicePixelRatio || 1;
+    const W = window.innerWidth, H = window.innerHeight;
+    canvas.width  = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    return { W, H };
+  }
+  sizeCanvas();
+
+  const b64 = 'ROBOT_B64_PLACEHOLDER';
+  let sceneUrl = null;
+  if (b64 && b64.length > 100) {
+    try {
+      const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      sceneUrl = URL.createObjectURL(new Blob([bytes]));
+    } catch(e) { console.error('[Spline] b64 decode failed:', e); }
+  }
+
+  const CDNS = [
+    'https://unpkg.com/@splinetool/runtime@latest/build/runtime.module.js',
+    'https://unpkg.com/@splinetool/runtime@1.9.28/build/runtime.module.js',
+    'https://cdn.jsdelivr.net/npm/@splinetool/runtime@latest/build/runtime.module.js',
+    'https://esm.run/@splinetool/runtime',
+  ];
+
+  async function tryLoad() {
+    if (!sceneUrl) throw new Error('no scene data');
+    for (const cdn of CDNS) {
+      try {
+        const mod = await import(cdn);
+        const Application = mod.Application || mod.default?.Application;
+        if (!Application) throw new Error('no Application export');
+        const app = new Application(canvas);
+        await app.load(sceneUrl);
+        window.addEventListener('resize', () => {
+          const { W, H } = sizeCanvas();
+          if (app.setSize) app.setSize(W, H);
+        });
+        loader.style.opacity = '0';
+        setTimeout(() => loader.style.display = 'none', 600);
+        return;
+      } catch(e) { console.warn('[Spline] CDN failed:', cdn, e.message); }
+    }
+    throw new Error('all CDNs failed');
+  }
+
+  tryLoad().catch(err => {
+    console.error('[Spline]', err);
+    loader.style.display = 'none';
+    const fb = document.createElement('div');
+    fb.style.cssText = 'position:absolute;top:50%;right:15%;transform:translate(50%,-50%);width:260px;height:260px;border-radius:50%;background:radial-gradient(circle at 38% 38%,rgba(180,120,255,0.55) 0%,rgba(0,212,255,0.38) 35%,rgba(123,47,255,0.2) 60%,transparent 75%);box-shadow:0 0 80px VERDICT_GLOW;animation:fb 4s ease-in-out infinite;';
+    document.head.insertAdjacentHTML('beforeend','<style>@keyframes fb{0%,100%{transform:translate(50%,-50%) scale(1);}50%{transform:translate(50%,-50%) scale(1.08);}}</style>');
+    document.getElementById('hero').appendChild(fb);
+  });
+</script>
+</body>
+</html>"""
+
+
+# ── Render the Spline hero ──
+_components.html(_hero_html, height=475, scrolling=False)
+
+# ── Progress bar + divider ──
+st.markdown("<div style='margin-top:6px;'></div>", unsafe_allow_html=True)
 render_progress_bar()
-st.markdown("<hr style='border-color:#e0eaf8;margin:18px 0 28px 0;'/>", unsafe_allow_html=True)
+st.markdown("<hr style='border-color:rgba(0,212,255,0.08);margin:14px 0 24px 0;'/>", unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════════════════════════
 #  STAGE 1 — ENTITY ONBOARDING
@@ -1619,6 +1769,11 @@ if st.session_state.current_stage == 1:
                 st.rerun()
 
 # ═══════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────
+#  RESULTS PAGE — SPLINE CREDIT VERDICT PANEL
+# ─────────────────────────────────────────────
+
 #  STAGE 2 — INTELLIGENT DOCUMENT UPLOAD
 # ═══════════════════════════════════════════════════════════════
 elif st.session_state.current_stage == 2:
@@ -1807,31 +1962,28 @@ elif st.session_state.current_stage == 3:
 
     classifications = st.session_state.doc_classifications
     data_types      = st.session_state.get("file_data_types", {})
-    schemas = st.session_state.extraction_schemas
+    schemas         = st.session_state.extraction_schemas
 
-    # ── Part A: Document Classification Review ──
     section_header("A", "📂", "Document Classification")
     st.caption("Verify the AI's classification. Each file shows its **data type** (Structured / Unstructured) and **document type**. Correct any errors using the dropdowns.")
 
-    # Split files into known-type and custom
     known_files  = {fn: cls for fn, cls in classifications.items() if cls != "Other (Custom)"}
     custom_files = {fn: cls for fn, cls in classifications.items() if cls == "Other (Custom)"}
 
     updated_classifications = {}
 
-    # ── Known types ──
     if known_files:
         for filename, current_class in known_files.items():
             dt = data_types.get(filename, "Unstructured")
-            dt_bg  = "#e8f5e9" if dt == "Structured" else "#fff3e0"
-            dt_col = "#2e7d32" if dt == "Structured" else "#e65100"
+            dt_bg  = "rgba(0,200,120,0.1)" if dt == "Structured" else "rgba(255,140,0,0.1)"
+            dt_col = "#60e0a8"              if dt == "Structured" else "#f0a060"
 
             col_fname, col_dtype, col_doctype = st.columns([3, 1, 2])
             with col_fname:
                 st.markdown(
-                    f'<div style="padding:10px 14px;background:#f0f6ff;border-radius:8px;'
-                    f'border:1px solid #c8d8f0;font-size:13px;font-weight:600;'
-                    f'color:#0d1f3c;">📄 {filename}</div>',
+                    f'<div style="padding:10px 14px;background:rgba(0,212,255,0.04);border-radius:8px;'
+                    f'border:1px solid rgba(0,212,255,0.12);font-size:13px;font-weight:600;'
+                    f'color:#c8dff5;">📄 {filename}</div>',
                     unsafe_allow_html=True
                 )
             with col_dtype:
@@ -1851,28 +2003,27 @@ elif st.session_state.current_stage == 3:
                 )
                 updated_classifications[filename] = chosen
 
-    # ── Other / Custom files ──
     if custom_files:
         st.markdown(
-            '<div style="background:#fff8e1;border:1.5px solid #ffe082;border-radius:10px;'
+            '<div style="background:rgba(255,180,0,0.06);border:1px solid rgba(255,180,0,0.2);border-radius:10px;'
             'padding:12px 16px;margin:16px 0 8px 0;">'
-            '<span style="font-size:12px;font-weight:700;color:#f57f17;">⚠️ Unrecognised Files — Other (Custom)</span><br/>'
-            '<span style="font-size:12px;color:#795548;">These files did not match any of the 5 core types. '
+            '<span style="font-size:12px;font-weight:700;color:#f0c060;">⚠️ Unrecognised Files — Other (Custom)</span><br/>'
+            '<span style="font-size:12px;color:#8a7040;">These files did not match any of the 5 core types. '
             'Re-classify them below or leave as Other (Custom).</span>'
             '</div>',
             unsafe_allow_html=True
         )
         for filename, current_class in custom_files.items():
             dt = data_types.get(filename, "Unstructured")
-            dt_bg  = "#e8f5e9" if dt == "Structured" else "#fff3e0"
-            dt_col = "#2e7d32" if dt == "Structured" else "#e65100"
+            dt_bg  = "rgba(0,200,120,0.1)" if dt == "Structured" else "rgba(255,140,0,0.1)"
+            dt_col = "#60e0a8"              if dt == "Structured" else "#f0a060"
 
             col_fname, col_dtype, col_doctype = st.columns([3, 1, 2])
             with col_fname:
                 st.markdown(
-                    f'<div style="padding:10px 14px;background:#fff8e1;border-radius:8px;'
-                    f'border:1px solid #ffe082;font-size:13px;font-weight:600;'
-                    f'color:#5d4037;">📄 {filename}</div>',
+                    f'<div style="padding:10px 14px;background:rgba(255,180,0,0.05);border-radius:8px;'
+                    f'border:1px solid rgba(255,180,0,0.2);font-size:13px;font-weight:600;'
+                    f'color:#c8a060;">📄 {filename}</div>',
                     unsafe_allow_html=True
                 )
             with col_dtype:
@@ -1895,14 +2046,12 @@ elif st.session_state.current_stage == 3:
     st.session_state.doc_classifications = updated_classifications
 
     st.markdown("---")
-    # ── Part B: Dynamic Schema Editor ──
     section_header("B", "⚙️", "Dynamic Extraction Schema")
     st.caption(
         "Define exactly which fields the AI should extract from each document type. "
         "Add custom fields relevant to your analysis."
     )
 
-    # Identify which doc types are actually in use (excluding pure "Other (Custom)" if no custom fields defined)
     active_doc_types = list(set(updated_classifications.values()))
 
     for doc_type in active_doc_types:
@@ -1910,15 +2059,16 @@ elif st.session_state.current_stage == 3:
         with st.expander(f"{icon} Schema for: **{doc_type}**", expanded=(doc_type != "Other (Custom)")):
             current_fields = schemas.get(doc_type, DEFAULT_SCHEMAS.get(doc_type, []))
 
-            # Show which files belong to this type
             files_of_type = [fn for fn, cls in updated_classifications.items() if cls == doc_type]
             dt_labels = []
             for fn in files_of_type:
                 dt = data_types.get(fn, "Unstructured")
-                dt_labels.append(f'<span style="background:{"#e8f5e9" if dt=="Structured" else "#fff3e0"};'
-                                  f'color:{"#2e7d32" if dt=="Structured" else "#e65100"};'
-                                  f'padding:1px 7px;border-radius:4px;font-size:11px;font-weight:700;">{dt}</span>'
-                                  f'&nbsp;<span style="font-size:11px;color:#5a6878;">{fn}</span>')
+                dt_labels.append(
+                    f'<span style="background:{"rgba(0,200,120,0.1)" if dt=="Structured" else "rgba(255,140,0,0.1)"};'
+                    f'color:{"#60e0a8" if dt=="Structured" else "#f0a060"};'
+                    f'padding:1px 7px;border-radius:4px;font-size:11px;font-weight:700;">{dt}</span>'
+                    f'&nbsp;<span style="font-size:11px;color:#5a7a9a;">{fn}</span>'
+                )
             st.markdown(
                 f'<div style="margin-bottom:10px;display:flex;flex-wrap:wrap;gap:6px;">'
                 + "".join(dt_labels) + "</div>",
@@ -1928,27 +2078,23 @@ elif st.session_state.current_stage == 3:
             if doc_type == "Other (Custom)" and not current_fields:
                 st.info("No extraction schema defined for custom files. Add fields below if needed.", icon="ℹ️")
 
-            # Display existing fields with remove buttons
             fields_to_keep = []
             for i, field in enumerate(current_fields):
                 col_field, col_remove = st.columns([5, 1])
                 with col_field:
                     edited_field = st.text_input(
-                        f"Field {i+1}",
-                        value=field,
+                        f"Field {i+1}", value=field,
                         key=f"schema_{doc_type}_{i}",
                         label_visibility="collapsed"
                     )
                     fields_to_keep.append(edited_field)
                 with col_remove:
-                    if st.button("✕", key=f"remove_{doc_type}_{i}",
-                                 help="Remove this field"):
+                    if st.button("✕", key=f"remove_{doc_type}_{i}", help="Remove this field"):
                         fields_to_keep.pop()
                         schemas[doc_type] = fields_to_keep
                         st.session_state.extraction_schemas = schemas
                         st.rerun()
 
-            # Add new field
             col_new, col_add = st.columns([4, 1])
             with col_new:
                 new_field = st.text_input(
@@ -1966,7 +2112,6 @@ elif st.session_state.current_stage == 3:
 
     st.session_state.extraction_schemas = schemas
 
-    # ── Navigation ──
     st.markdown("---")
     col_back, col_approve = st.columns([1, 3])
     with col_back:
@@ -1980,6 +2125,7 @@ elif st.session_state.current_stage == 3:
             st.session_state.classification_approved = True
             go_to_stage(4); st.rerun()
 
+
 # ═══════════════════════════════════════════════════════════════
 #  STAGE 4 — PRE-COGNITIVE ANALYSIS & OUTPUT
 # ═══════════════════════════════════════════════════════════════
@@ -1992,7 +2138,6 @@ if st.session_state.current_stage == 4:
 
     section_header("4", "📊", "Pre-Cognitive Analysis")
 
-    # ── Run Analysis (only once per session) ──
     if not st.session_state.analysis_complete:
         progress = st.progress(0, text="🚀 Initialising Pre-Cognitive Analysis Engine...")
 
@@ -2000,20 +2145,15 @@ if st.session_state.current_stage == 4:
         company_name = ed["company_name"]
         ceo_name     = ed["ceo_name"]
 
-        # Step 1: Parse documents using schema-aware parsers
         progress.progress(15, text="📄 Parsing uploaded documents with Dynamic Schema...")
         pdf_files = [f for f in files if f.name.endswith(".pdf")]
         csv_files = [f for f in files if not f.name.endswith(".pdf")]
 
         if pdf_files:
             for pdf in pdf_files:
-                doc_type = classifications.get(pdf.name)
+                doc_type    = classifications.get(pdf.name)
                 file_schema = schemas.get(doc_type, []) if doc_type else []
 
-                # ── Read bytes ONCE, store in session state ──────────────────
-                # This guarantees the sha256 hash is identical for both
-                # analyze_pdf_risks_with_schema AND extract_schema_with_evidence,
-                # so the DocAI document cache is always hit on the second call.
                 if pdf.name not in st.session_state.get("_pdf_bytes_cache", {}):
                     pdf.seek(0)
                     if "_pdf_bytes_cache" not in st.session_state:
@@ -2021,10 +2161,9 @@ if st.session_state.current_stage == 4:
                     st.session_state["_pdf_bytes_cache"][pdf.name] = pdf.read()
                 raw_bytes = st.session_state["_pdf_bytes_cache"][pdf.name]
 
-                # ── Main analysis (uses same raw_bytes → populates DocAI cache) ──
                 import io
                 pdf_like = io.BytesIO(raw_bytes)
-                pdf_like.name = pdf.name  # keep .name attribute for logging
+                pdf_like.name = pdf.name
                 summary = analyze_pdf_risks_with_schema(
                     uploaded_file=pdf_like,
                     llm_function=analyze_text_with_fallback,
@@ -2035,17 +2174,10 @@ if st.session_state.current_stage == 4:
                     f"\n### {doc_type or 'Document'}: {pdf.name}\n{summary}\n"
                 )
 
-                # ── Evidence collection for Schema Verification UI ────────────
-                # Skip if already collected (e.g. previous run was interrupted
-                # after this file completed — no need to redo).
                 already_done = pdf.name in st.session_state.extraction_evidence
                 if _USE_DOCAI and file_schema and not already_done:
                     try:
-                        from src.data_ingestor.docai_parser import (
-                            extract_schema_with_evidence,
-                        )
-                        # raw_bytes is the same object whose sha256 is already
-                        # in the DocAI cache → cache hit, zero extra API calls.
+                        from src.data_ingestor.docai_parser import extract_schema_with_evidence
                         ev = extract_schema_with_evidence(
                             pdf_bytes=raw_bytes,
                             schema_fields=file_schema,
@@ -2059,7 +2191,6 @@ if st.session_state.current_stage == 4:
                             f"`{_ev_err}`. The Schema Verification tab will not be available for this file.",
                             icon="⚠️",
                         )
-                        print(f"⚠️ Evidence extraction skipped for {pdf.name}: {_ev_err}")
 
         if csv_files:
             struct_report = analyze_structured_data_with_schema(
@@ -2069,17 +2200,14 @@ if st.session_state.current_stage == 4:
             )
             extracted_insights += f"\n{struct_report}\n"
 
-        # Step 2: Web Intelligence Triangulation
         progress.progress(45, text=f"🌐 Crawling web for {company_name} intelligence...")
         web_report = crawl_company_news(company_name, ceo_name)
         st.session_state.web_research = web_report
-        # Kept separate so the final prompt can triangulate docs vs web explicitly
         web_insights = web_report
 
-        # Step 3: ML Risk Score
         progress.progress(65, text="🧠 Running ML Risk Scoring Engine...")
         decision = calculate_risk_score(
-            qualitative_notes="",  # All signal comes from documents
+            qualitative_notes="",
             extracted_insights=extracted_insights,
             requested_amount=ld["requested_amount"],
             company_name=company_name,
@@ -2087,7 +2215,6 @@ if st.session_state.current_stage == 4:
         )
         st.session_state.final_decision = decision
 
-        # Step 4: SWOT + CAM Generation (triangulates doc data vs web intelligence)
         progress.progress(80, text="📑 Generating SWOT Analysis & Investment Report...")
 
         swot_and_cam_prompt = f"""
@@ -2156,11 +2283,9 @@ Provide 3–5 bullet points.
 | Key Covenants | |
 | Conditions Precedent | |
 """
-
         cam_summary = analyze_text_with_fallback(swot_and_cam_prompt)
         st.session_state.cam_summary = cam_summary
 
-        # Step 5: Build downloadable PDF investment report
         st.session_state.pdf_bytes = _build_pdf(
             cam_summary=cam_summary,
             entity_data=ed,
@@ -2181,54 +2306,38 @@ Provide 3–5 bullet points.
     s_color     = score_color(s_score)
     verdict     = "APPROVE" if s_score >= 7 else "CAUTION" if s_score >= 5 else "REJECT"
 
-    # ── Score Cards ──
-    c1, c2, c3, c4 = st.columns(4, gap="medium")
-    with c1:
-        st.markdown(f"""
-        <div class="metric-card" style="border-top:4px solid {s_color};">
-          <div style="font-size:10px;letter-spacing:.14em;color:#6a88aa;font-weight:700;
-                      text-transform:uppercase;margin-bottom:8px;">Credit Score</div>
-          <div style="font-size:38px;font-weight:800;color:{s_color};">
-            {s_score}<span style="font-size:16px;color:#9ab0c8;"> / 10</span>
-          </div>
-          <div style="margin-top:10px;height:5px;background:#e4eef8;border-radius:3px;">
-            <div style="width:{s_score*10}%;height:100%;background:{s_color};border-radius:3px;"></div>
-          </div>
-        </div>""", unsafe_allow_html=True)
-    with c2:
-        st.markdown(f"""
-        <div class="metric-card" style="border-top:4px solid #1a5fd4;">
-          <div style="font-size:10px;letter-spacing:.14em;color:#6a88aa;font-weight:700;
-                      text-transform:uppercase;margin-bottom:8px;">Approved Limit</div>
-          <div style="font-size:22px;font-weight:800;color:#0d1f3c;">
-            {format_to_inr_words(decision.get('recommended_limit_inr', 0))}
-          </div>
-        </div>""", unsafe_allow_html=True)
-    with c3:
-        st.markdown(f"""
-        <div class="metric-card" style="border-top:4px solid #6a4fd4;">
-          <div style="font-size:10px;letter-spacing:.14em;color:#6a88aa;font-weight:700;
-                      text-transform:uppercase;margin-bottom:8px;">Interest Rate</div>
-          <div style="font-size:38px;font-weight:800;color:#6a4fd4;">
-            {decision.get('recommended_interest_rate', 0)}<span style="font-size:16px;">%</span>
-          </div>
-        </div>""", unsafe_allow_html=True)
-    with c4:
-        vbg  = {"APPROVE": "#edfbf4", "CAUTION": "#fffbec", "REJECT": "#fff0f0"}
-        vbdr = {"APPROVE": "#88d8b8", "CAUTION": "#f0d060",  "REJECT": "#ffaaaa"}
-        vicon= {"APPROVE": "✅",       "CAUTION": "⚠️",       "REJECT": "❌"}
-        st.markdown(f"""
-        <div class="metric-card" style="border-top:4px solid {s_color};
-             background:{vbg.get(verdict,'#fff')};border-color:{vbdr.get(verdict,'#d8e8f8')};">
-          <div style="font-size:10px;letter-spacing:.14em;color:{s_color};font-weight:700;
-                      text-transform:uppercase;margin-bottom:8px;">System Verdict</div>
-          <div style="font-size:30px;font-weight:800;color:{s_color};">{verdict}</div>
-          <div style="font-size:22px;margin-top:4px;">{vicon.get(verdict,'')}</div>
-        </div>""", unsafe_allow_html=True)
+    # ── Unified Results Hero — Spline orb + metric cards in one panel ──
+    _vc_map = {
+        "APPROVE": ("#00d4a0", "rgba(0,212,160,0.45)", 0, 212, 160),
+        "CAUTION": ("#f0c060", "rgba(240,192,96,0.45)",  240, 192, 96),
+        "REJECT":  ("#ff6060", "rgba(255,96,96,0.45)",   255, 96,  96),
+    }
+    _vc_color, _vc_glow, _vr, _vg, _vb = _vc_map.get(verdict, ("#00d4ff","rgba(0,212,255,0.45)",0,212,255))
+    _verdict_icon = {"APPROVE": "✅", "CAUTION": "⚠️", "REJECT": "❌"}.get(verdict, "")
+    _limit_str  = format_to_inr_words(decision.get("recommended_limit_inr", 0))
+    _rate_str   = str(decision.get("recommended_interest_rate", 0))
+    _entity_str = ed.get("company_name", "—")[:30]
+    _results_spline_html = (
+        _RESULTS_SPLINE_TEMPLATE
+        .replace("SPLINE_B64_PLACEHOLDER", _SPLINE_B64)
+        .replace("ROBOT_B64_PLACEHOLDER", _ROBOT_SPLINE_B64)
+        .replace("VERDICT_COLOR",  _vc_color)
+        .replace("VERDICT_GLOW",   _vc_glow)
+        .replace("VERDICT_R",      str(_vr))
+        .replace("VERDICT_G",      str(_vg))
+        .replace("VERDICT_B",      str(_vb))
+        .replace("SCORE_PCT",      str(s_score * 10))
+        .replace("SCORE_VAL",      str(s_score))
+        .replace("SCORE_COLOR",    s_color)
+        .replace("VERDICT_WORD",   verdict)
+        .replace("VERDICT_ICON",   _verdict_icon)
+        .replace("LIMIT_VAL",      _limit_str)
+        .replace("RATE_VAL",       _rate_str)
+        .replace("ENTITY_VAL",     _entity_str)
+    )
+    _components.html(_results_spline_html, height=460, scrolling=False)
+    st.markdown("<div style='height:4px;'></div>", unsafe_allow_html=True)
 
-    st.markdown("<div style='height:24px;'></div>", unsafe_allow_html=True)
-
-    # ── Data Pipeline Logs ──
     section_header("2", "⚙️", "Real-Time Data Pipeline Logs")
     tab_web, tab_decision, tab_verify = st.tabs(
         ["🌐 Web Intelligence", "🧠 AI Decision Logic", "🔍 Schema Verification"]
@@ -2238,19 +2347,17 @@ Provide 3–5 bullet points.
     with tab_decision:
         logic_html = decision.get("decision_logic", "No logic available.")
         st.markdown(
-            f'<div class="research-log" style="font-family:\'Plus Jakarta Sans\',sans-serif;">'
+            f'<div class="research-log" style="font-family:\'DM Mono\',monospace;">'
             f'{logic_html}</div>',
             unsafe_allow_html=True
         )
     with tab_verify:
         _render_schema_verification_tab()
 
-    # ── Investment Report (CAM) ──
     st.markdown("---")
     section_header("3", "📋", "Investment Report")
     st.markdown(cam_summary)
 
-    # ── Export ──
     st.markdown("---")
     section_header("4", "📤", "Export")
     col_dl, col_restart = st.columns([3, 1])
