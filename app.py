@@ -7,6 +7,7 @@ import base64
 import streamlit.components.v1 as _components
 from datetime import datetime
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -115,15 +116,15 @@ st.markdown("""
   }
   h1, h2, h3, h4, h5, h6 { color: #e8f4ff !important; }
 
-  /* ══ INPUT FIELDS ══ */
+  /* ══ INPUT FIELDS — adaptive light/dark ══ */
   .stTextInput > div > div > input,
   .stNumberInput > div > div > input,
   .stTextArea > div > div > textarea,
   [data-baseweb="input"] input,
   [data-baseweb="base-input"] input,
   [data-baseweb="textarea"] textarea {
-    background-color: rgba(255,255,255,0.05) !important;
-    border: 1px solid rgba(0,212,255,0.2) !important;
+    background-color: #0d1a30 !important;
+    border: 1px solid rgba(0,212,255,0.25) !important;
     color: #e8f4ff !important;
     border-radius: 8px !important;
     font-family: 'Manrope', sans-serif !important;
@@ -135,7 +136,7 @@ st.markdown("""
   .stTextArea > div > div > textarea::placeholder,
   [data-baseweb="input"] input::placeholder,
   [data-baseweb="textarea"] textarea::placeholder {
-    color: rgba(0,212,255,0.35) !important;
+    color: rgba(0,180,210,0.5) !important;
     opacity: 1 !important;
   }
   .stTextInput > div > div > input:focus,
@@ -143,12 +144,16 @@ st.markdown("""
   .stTextArea > div > div > textarea:focus {
     border-color: #00d4ff !important;
     box-shadow: 0 0 0 3px rgba(0,212,255,0.12) !important;
+    background-color: #0d1a30 !important;
   }
   .stTextInput label, .stNumberInput label,
   .stTextArea label, .stFileUploader label,
-  label, .stWidgetLabel, [data-testid="stWidgetLabel"] p {
+  label, .stWidgetLabel, [data-testid="stWidgetLabel"] p,
+  [data-testid="stWidgetLabel"] > div > label,
+  [data-testid="stWidgetLabel"] > div > p {
     font-weight: 600 !important; font-size: 13px !important;
-    color: #8ab0cf !important;
+    color: #c8dff5 !important;
+    opacity: 1 !important;
     font-family: 'Manrope', sans-serif !important;
   }
 
@@ -172,17 +177,17 @@ st.markdown("""
   /* ══ NUMBER INPUT STEPPER ══ */
   .stNumberInput button,
   div[data-testid="stNumberInput"] button {
-    background-color: rgba(0,212,255,0.08) !important;
-    border: 1px solid rgba(0,212,255,0.2) !important;
-    color: #00d4ff !important;
+    background-color: #0d1a30 !important;
+    border: 1px solid rgba(0,212,255,0.25) !important;
+    color: #00aacc !important;
     border-radius: 6px !important;
   }
 
   /* ══ SELECTBOX ══ */
   [data-testid="stSelectbox"] > div > div,
   div[data-baseweb="select"] > div:first-child {
-    background-color: rgba(255,255,255,0.05) !important;
-    border: 1px solid rgba(0,212,255,0.2) !important;
+    background-color: #0d1a30 !important;
+    border: 1px solid rgba(0,212,255,0.25) !important;
     border-radius: 8px !important;
   }
   [data-testid="stSelectbox"] span,
@@ -193,30 +198,30 @@ st.markdown("""
   div[data-baseweb="select"] input { color: #e8f4ff !important; }
 
   /* Dropdown popup portal */
-  [data-baseweb="popover"], [data-baseweb="popover"] > div { background-color: #0d1a38 !important; }
+  [data-baseweb="popover"], [data-baseweb="popover"] > div { background-color: #0d1a30 !important; }
   [data-baseweb="menu"], ul[data-baseweb="menu"] {
-    background-color: #0d1a38 !important;
+    background-color: #0d1a30 !important;
     border: 1px solid rgba(0,212,255,0.2) !important;
     border-radius: 10px !important;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,212,255,0.1) !important;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,212,255,0.08) !important;
   }
   [data-baseweb="menu"] li, [role="option"] {
-    background-color: #0d1a38 !important;
-    color: #c8dff5 !important;
+    background-color: #0d1a30 !important;
+    color: var(--text-color) !important;
     font-size: 13px !important;
   }
   [role="option"]:hover, [data-baseweb="menu"] li:hover {
     background-color: rgba(0,212,255,0.1) !important; color: #00d4ff !important;
   }
   [role="option"] *, [data-baseweb="menu"] li * {
-    color: #c8dff5 !important; background-color: transparent !important;
+    color: var(--text-color) !important; background-color: transparent !important;
   }
   [role="option"]:hover *, [data-baseweb="menu"] li:hover * { color: #00d4ff !important; }
 
   /* ══ SLIDER ══ */
   .stSlider [data-baseweb="slider"] [role="slider"] { background: #00d4ff !important; border-color: #00d4ff !important; }
   .stSlider [data-baseweb="slider"] div[data-testid="stSliderTrackFill"] { background: linear-gradient(90deg, #00d4ff, #7b2fff) !important; }
-  .stSlider [data-baseweb="slider"] div { background-color: rgba(255,255,255,0.1) !important; }
+  .stSlider [data-baseweb="slider"] div { background-color: rgba(0,0,0,0.08) !important; }
 
   /* ══ FILE UPLOADER ══ */
   [data-testid="stFileUploadDropzone"],
@@ -244,7 +249,7 @@ st.markdown("""
   /* Uploaded file rows */
   [data-testid="stFileUploaderFile"],
   [data-testid="stFileUploaderFileData"] {
-    background-color: rgba(255,255,255,0.04) !important;
+    background-color: var(--secondary-background-color) !important;
     border: 1px solid rgba(0,212,255,0.15) !important; border-radius: 8px !important;
   }
   [data-testid="stFileUploaderFile"] * { color: #c8dff5 !important; background-color: transparent !important; }
@@ -284,11 +289,11 @@ st.markdown("""
   /* ══ EXPANDER ══ */
   details {
     background-color: rgba(255,255,255,0.03) !important;
-    border: 1px solid rgba(0,212,255,0.12) !important;
+    border: 1px solid rgba(0,212,255,0.15) !important;
     border-radius: 12px !important;
   }
   details > summary {
-    background-color: rgba(0,212,255,0.05) !important;
+    background-color: rgba(0,212,255,0.06) !important;
     border-radius: 12px !important;
     padding: 10px 14px !important;
     cursor: pointer !important;
@@ -311,7 +316,7 @@ st.markdown("""
   /* ══ TABS ══ */
   .stTabs [data-baseweb="tab-list"] {
     background-color: rgba(255,255,255,0.04) !important; border-radius: 12px !important;
-    padding: 4px !important; border: 1px solid rgba(0,212,255,0.12) !important;
+    padding: 4px !important; border: 1px solid rgba(0,212,255,0.15) !important;
   }
   .stTabs [data-baseweb="tab"] {
     color: #6a8aaa !important; border-radius: 8px !important;
@@ -406,8 +411,8 @@ st.markdown("""
 
   /* ══ METRIC CARD ══ */
   .metric-card {
-    background: rgba(255,255,255,0.04); 
-    border: 1px solid rgba(0,212,255,0.12); 
+    background: var(--secondary-background-color); 
+    border: 1px solid rgba(0,212,255,0.18); 
     border-radius: 16px;
     padding: 20px 22px; margin-bottom: 14px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.3); overflow: hidden;
@@ -457,8 +462,8 @@ st.markdown("""
 
   /* ══ FORM ══ */
   [data-testid="stForm"] {
-    background: rgba(255,255,255,0.02) !important;
-    border: 1px solid rgba(0,212,255,0.08) !important;
+    background: rgba(4,10,22,0.6) !important;
+    border: 1px solid rgba(0,212,255,0.12) !important;
     border-radius: 14px !important;
     padding: 24px !important;
   }
@@ -1156,7 +1161,7 @@ def _build_pdf(cam_summary, entity_data, loan_data, decision):
         pdf.set_font("Helvetica", "B", 9)
         pdf.set_fill_color(4, 10, 22)
         pdf.set_text_color(0, 212, 255)
-        pdf.cell(174, 7, f"  {title}", fill=True, ln=True)
+        pdf.cell(174, 7, f"  {title}", fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_text_color(200, 223, 245)
         pdf.set_font("Helvetica", "", 9)
         pdf.ln(2)
@@ -1166,7 +1171,7 @@ def _build_pdf(cam_summary, entity_data, loan_data, decision):
         pdf.set_text_color(200, 223, 245)
         clean = _clean(text.lstrip("-•* "))
         if not clean.strip(): return
-        pdf.cell(6)
+        pdf.cell(6, txt="")
         pdf.multi_cell(168, 5, "-  " + clean[:300])
         pdf.ln(1)
 
@@ -1225,19 +1230,19 @@ def _build_pdf(cam_summary, entity_data, loan_data, decision):
     pdf.set_font("Helvetica", "B", 9)
     pdf.cell(174, 8,
         f"  FINAL RECOMMENDATION: {verdict}  |  SCORE: {s_score}/10  |  LIMIT: INR {decision.get('recommended_limit_inr',0):,}",
-        fill=True, ln=True)
+        fill=True, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.ln(6)
     pdf.set_text_color(200, 223, 245)
     pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(174, 7, f"BORROWING ENTITY: {_clean(entity_data.get('company_name','').upper())}", ln=True)
+    pdf.cell(174, 7, f"BORROWING ENTITY: {_clean(entity_data.get('company_name','').upper())}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.ln(3)
 
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_fill_color(0, 60, 90)
     pdf.set_text_color(0, 212, 255)
     pdf.cell(87, 7, "ENTITY DETAILS", border=1, fill=True, align="C")
-    pdf.cell(4)
+    pdf.cell(4, txt="")
     pdf.cell(83, 7, "FACILITY DETAILS", border=1, fill=True, align="C")
     pdf.ln(8)
 
@@ -1265,7 +1270,7 @@ def _build_pdf(cam_summary, entity_data, loan_data, decision):
         pdf.set_font("Helvetica", "", 8.5)
         pdf.set_text_color(200, 223, 245)
         pdf.cell(59, 6, ev[:42], border="RTB")
-        pdf.cell(4)
+        pdf.cell(4, txt="")
         pdf.set_font("Helvetica", "B", 8.5)
         pdf.set_text_color(0, 180, 220)
         pdf.cell(26, 6, ll, border="LTB")
@@ -1524,38 +1529,92 @@ _RESULTS_SPLINE_TEMPLATE = """<!DOCTYPE html>
 <style>
   *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
   html, body { width:100%; height:100%; overflow:hidden; background:transparent; font-family:'Manrope',sans-serif; }
-  #hero { position:relative; width:100%; height:100%; background:radial-gradient(ellipse at 72% 50%,rgba(VERDICT_R,VERDICT_G,VERDICT_B,0.14) 0%,rgba(0,212,255,0.05) 36%,#040a16 66%); border:1px solid rgba(VERDICT_R,VERDICT_G,VERDICT_B,0.18); border-radius:16px; overflow:hidden; }
-  #hero::before { content:''; position:absolute; inset:0; z-index:1; pointer-events:none; background-image:radial-gradient(circle,rgba(0,212,255,0.04) 1px,transparent 1px); background-size:32px 32px; border-radius:16px; }
-  #spline-canvas { position:absolute; top:0; left:0; display:block; z-index:2; }
-  .left-panel { position:absolute; top:0; left:0; width:56%; height:100%; z-index:20; pointer-events:none; user-select:none; display:flex; flex-direction:column; justify-content:center; padding:0 0 0 36px; background:linear-gradient(to right,rgba(4,10,22,0.97) 0%,rgba(4,10,22,0.85) 50%,transparent 100%); }
+
+  #hero {
+    position:relative; width:100%; height:100%;
+    background:radial-gradient(ellipse at 75% 50%,
+      rgba(VERDICT_R,VERDICT_G,VERDICT_B,0.12) 0%,
+      rgba(0,212,255,0.04) 36%, #040a16 65%);
+    border:1px solid rgba(VERDICT_R,VERDICT_G,VERDICT_B,0.18);
+    border-radius:16px; overflow:hidden;
+  }
+  #hero::before {
+    content:''; position:absolute; inset:0; z-index:1; pointer-events:none;
+    background-image:radial-gradient(circle,rgba(0,212,255,0.04) 1px,transparent 1px);
+    background-size:32px 32px; border-radius:16px;
+  }
+
+  /* Canvas wrapper — clips the zoomed+shifted canvas */
+  #spline-wrap {
+    position:absolute;
+    top:0; right:0;           /* robot lives on the RIGHT half */
+    width:58%; height:100%;
+    overflow:hidden;
+    z-index:2;
+  }
+
+  /* Canvas itself is larger than the wrapper and shifted so the robot
+     fills the right-side viewport. scale() makes it bigger. */
+  #spline-canvas {
+    position:absolute;
+    top:50%; left:50%;
+    transform: translate(-50%, -50%) scale(1.45) translateX(12%);
+    transform-origin: center center;
+    display:block;
+    /* width/height set by JS */
+  }
+
+  /* Ensure pointer events work through the clip container */
+  #spline-wrap, #spline-canvas { pointer-events:auto; }
+
+  /* Left panel — non-blocking text overlay */
+  .left-panel {
+    position:absolute; top:0; left:0;
+    width:52%; height:100%; z-index:20;
+    pointer-events:none; user-select:none;
+    display:flex; flex-direction:column; justify-content:center;
+    padding:0 0 0 36px;
+    background:linear-gradient(to right,
+      rgba(4,10,22,0.98) 0%, rgba(4,10,22,0.88) 52%, transparent 100%);
+  }
+
   .eyebrow { display:flex; align-items:center; gap:8px; font-size:9px; letter-spacing:0.26em; text-transform:uppercase; color:rgba(0,212,255,0.55); font-weight:700; margin-bottom:16px; }
   .eyebrow-dot { width:6px; height:6px; border-radius:50%; background:VERDICT_COLOR; box-shadow:0 0 8px VERDICT_GLOW; animation:pdot 2s ease-in-out infinite; }
   @keyframes pdot{0%,100%{transform:scale(1);opacity:1;}50%{transform:scale(1.5);opacity:0.6;}}
-  .cards { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:420px; }
+
+  .cards { display:grid; grid-template-columns:1fr 1fr; gap:10px; max-width:400px; }
   .card { background:rgba(255,255,255,0.05); border:1px solid rgba(0,212,255,0.1); border-radius:12px; padding:14px 16px; backdrop-filter:blur(10px); }
   .card.v { background:rgba(VERDICT_R,VERDICT_G,VERDICT_B,0.07); border-color:rgba(VERDICT_R,VERDICT_G,VERDICT_B,0.28); }
   .lbl { font-size:8.5px; letter-spacing:0.18em; text-transform:uppercase; color:rgba(0,212,255,0.4); font-weight:700; margin-bottom:7px; }
-  .score-val { font-size:46px; font-weight:900; line-height:1; color:SCORE_COLOR; }
-  .score-val sup { font-size:16px; color:rgba(255,255,255,0.22); font-weight:600; }
+  .score-val { font-size:44px; font-weight:900; line-height:1; color:SCORE_COLOR; }
+  .score-val sup { font-size:15px; color:rgba(255,255,255,0.22); font-weight:600; }
   .score-bar { height:3px; background:rgba(255,255,255,0.07); border-radius:3px; margin-top:9px; overflow:hidden; }
   .score-bar-fill { height:100%; width:SCORE_PCT%; background:linear-gradient(90deg,SCORE_COLOR,rgba(0,212,255,0.75)); border-radius:3px; }
-  .limit-val { font-size:19px; font-weight:800; color:#e8f4ff; line-height:1.15; }
+  .limit-val { font-size:18px; font-weight:800; color:#e8f4ff; line-height:1.15; }
   .limit-sub { font-size:9px; color:rgba(0,212,255,0.4); margin-top:3px; font-weight:600; text-transform:uppercase; letter-spacing:0.1em; }
-  .rate-val { font-size:40px; font-weight:900; color:#9b6fff; line-height:1; }
-  .rate-val sup { font-size:15px; color:rgba(155,111,255,0.45); }
-  .verdict-val { font-size:24px; font-weight:900; color:VERDICT_COLOR; line-height:1; letter-spacing:0.04em; }
+  .rate-val { font-size:38px; font-weight:900; color:#9b6fff; line-height:1; }
+  .rate-val sup { font-size:14px; color:rgba(155,111,255,0.45); }
+  .verdict-val { font-size:23px; font-weight:900; color:VERDICT_COLOR; line-height:1; letter-spacing:0.04em; }
   .verdict-dot { width:8px; height:8px; border-radius:50%; background:VERDICT_COLOR; box-shadow:0 0 10px VERDICT_GLOW; display:inline-block; margin-right:6px; animation:pdot 2s ease-in-out infinite; }
   .verdict-icon { font-size:19px; margin-top:4px; }
-  .loader { position:absolute; top:50%; right:26%; transform:translate(50%,-50%); z-index:15; display:flex; align-items:center; justify-content:center; transition:opacity 0.5s; }
-  .loader-ring { width:42px; height:42px; border:2px solid rgba(0,212,255,0.1); border-top:2px solid VERDICT_COLOR; border-radius:50%; animation:spin 1s linear infinite; }
+
+  .loader { position:absolute; top:50%; right:28%; transform:translate(50%,-50%); z-index:15; display:flex; align-items:center; justify-content:center; transition:opacity 0.5s; }
+  .loader-ring { width:44px; height:44px; border:2px solid rgba(0,212,255,0.1); border-top:2px solid VERDICT_COLOR; border-radius:50%; animation:spin 1s linear infinite; }
   @keyframes spin{to{transform:rotate(360deg);}}
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
 <div id="hero">
-  <canvas id="spline-canvas"></canvas>
+
+  <!-- Robot canvas sits inside a clipping wrapper on the right -->
+  <div id="spline-wrap">
+    <canvas id="spline-canvas"></canvas>
+  </div>
+
   <div class="loader" id="loader"><div class="loader-ring"></div></div>
+
+  <!-- Left panel: metric cards, pointer-events:none -->
   <div class="left-panel">
     <div class="eyebrow"><div class="eyebrow-dot"></div>AI Credit Decision &nbsp;·&nbsp; ENTITY_VAL</div>
     <div class="cards">
@@ -1568,9 +1627,13 @@ _RESULTS_SPLINE_TEMPLATE = """<!DOCTYPE html>
 </div>
 
 <script type="module">
-  const canvas = document.getElementById('spline-canvas');
-  const loader = document.getElementById('loader');
+  const canvas  = document.getElementById('spline-canvas');
+  const wrap    = document.getElementById('spline-wrap');
+  const loader  = document.getElementById('loader');
 
+  // Size the canvas to the FULL viewport — Spline raycasts against these dimensions.
+  // The CSS transform on the canvas handles the visual zoom/shift without affecting
+  // the coordinate system Spline uses, because we correct pointer events below.
   function sizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
     const W = window.innerWidth, H = window.innerHeight;
@@ -1588,7 +1651,7 @@ _RESULTS_SPLINE_TEMPLATE = """<!DOCTYPE html>
     try {
       const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
       sceneUrl = URL.createObjectURL(new Blob([bytes]));
-    } catch(e) { console.error('[Spline] b64 decode failed:', e); }
+    } catch(e) { console.error('[Spline] b64 decode:', e); }
   }
 
   const CDNS = [
@@ -1600,19 +1663,43 @@ _RESULTS_SPLINE_TEMPLATE = """<!DOCTYPE html>
 
   async function tryLoad() {
     if (!sceneUrl) throw new Error('no scene data');
+
     for (const cdn of CDNS) {
       try {
         const mod = await import(cdn);
         const Application = mod.Application || mod.default?.Application;
         if (!Application) throw new Error('no Application export');
+
         const app = new Application(canvas);
         await app.load(sceneUrl);
+
+        // ── Skip intro animation: jump straight to the end state ──────────
+        // The robot scene has a timeline animation that plays on start.
+        // We stop it immediately and seek to the last frame so the robot
+        // is already fully present in its final position.
+        try {
+          if (app.stop) app.stop();
+          // Try to get all timeline animations and seek to end
+          const allObjs = app.getAllObjects ? app.getAllObjects() : [];
+          allObjs.forEach(obj => {
+            if (obj.animations && obj.animations.length) {
+              obj.animations.forEach(anim => {
+                if (anim.seek) anim.seek(1);       // seek to 100%
+                if (anim.pause) anim.pause();
+              });
+            }
+          });
+        } catch(animErr) {
+          // Animation API not available on this version — ignore
+        }
+
         window.addEventListener('resize', () => {
           const { W, H } = sizeCanvas();
           if (app.setSize) app.setSize(W, H);
         });
+
         loader.style.opacity = '0';
-        setTimeout(() => loader.style.display = 'none', 600);
+        setTimeout(() => loader.style.display = 'none', 400);
         return;
       } catch(e) { console.warn('[Spline] CDN failed:', cdn, e.message); }
     }
@@ -1622,9 +1709,10 @@ _RESULTS_SPLINE_TEMPLATE = """<!DOCTYPE html>
   tryLoad().catch(err => {
     console.error('[Spline]', err);
     loader.style.display = 'none';
+    // CSS robot silhouette fallback
     const fb = document.createElement('div');
-    fb.style.cssText = 'position:absolute;top:50%;right:15%;transform:translate(50%,-50%);width:260px;height:260px;border-radius:50%;background:radial-gradient(circle at 38% 38%,rgba(180,120,255,0.55) 0%,rgba(0,212,255,0.38) 35%,rgba(123,47,255,0.2) 60%,transparent 75%);box-shadow:0 0 80px VERDICT_GLOW;animation:fb 4s ease-in-out infinite;';
-    document.head.insertAdjacentHTML('beforeend','<style>@keyframes fb{0%,100%{transform:translate(50%,-50%) scale(1);}50%{transform:translate(50%,-50%) scale(1.08);}}</style>');
+    fb.style.cssText = 'position:absolute;top:50%;right:5%;transform:translateY(-50%);width:220px;height:320px;background:linear-gradient(180deg,rgba(0,212,255,0.15) 0%,rgba(123,47,255,0.2) 50%,rgba(0,212,255,0.08) 100%);border-radius:40% 40% 30% 30%/30% 30% 40% 40%;box-shadow:0 0 60px VERDICT_GLOW,inset 0 0 30px rgba(0,212,255,0.1);animation:rbfb 4s ease-in-out infinite;border:1px solid rgba(VERDICT_R,VERDICT_G,VERDICT_B,0.3);';
+    document.head.insertAdjacentHTML('beforeend','<style>@keyframes rbfb{0%,100%{transform:translateY(-50%) scale(1);}50%{transform:translateY(-52%) scale(1.03);}}</style>');
     document.getElementById('hero').appendChild(fb);
   });
 </script>
@@ -2286,12 +2374,16 @@ Provide 3–5 bullet points.
         cam_summary = analyze_text_with_fallback(swot_and_cam_prompt)
         st.session_state.cam_summary = cam_summary
 
-        st.session_state.pdf_bytes = _build_pdf(
-            cam_summary=cam_summary,
-            entity_data=ed,
-            loan_data=ld,
-            decision=decision,
-        )
+        try:
+            st.session_state.pdf_bytes = _build_pdf(
+                cam_summary=cam_summary,
+                entity_data=ed,
+                loan_data=ld,
+                decision=decision,
+            )
+        except Exception as _pdf_err:
+            st.warning(f"⚠️ PDF generation error: {_pdf_err}. Report available as text only.")
+            st.session_state.pdf_bytes = b""
 
         progress.progress(100, text="✅ Analysis complete.")
         st.session_state.analysis_complete = True
@@ -2363,12 +2455,16 @@ Provide 3–5 bullet points.
     col_dl, col_restart = st.columns([3, 1])
     with col_dl:
         company_slug = ed.get("company_name", "entity").replace(" ", "_")
+        _pdf_data = st.session_state.pdf_bytes or b""
+        if not _pdf_data:
+            st.warning("⚠️ PDF could not be generated. Check the error above or try re-running the analysis.")
         st.download_button(
             label="📥  Download Investment Report (PDF)",
-            data=st.session_state.pdf_bytes or b"",
+            data=_pdf_data,
             file_name=f"{company_slug}_Investment_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
             mime="application/pdf",
             use_container_width=True,
+            disabled=(not _pdf_data),
         )
     with col_restart:
         if st.button("🔄 New Appraisal", use_container_width=True):
